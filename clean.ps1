@@ -82,10 +82,24 @@ if (-not [string]::IsNullOrWhiteSpace($Project)) {
     docker compose -f $composePath -p $Project down --remove-orphans
   }
 
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  # Check if Docker commands failed
+  $dockerFailed = ($LASTEXITCODE -ne 0)
+
+  if ($dockerFailed) {
+    if ($RemoveProject) {
+      # When removing project, warn but continue to folder deletion
+      Write-Host ""
+      Write-Host "Warning: Docker cleanup failed (is Docker running?)" -ForegroundColor Yellow
+      Write-Host "Continuing with project folder removal..." -ForegroundColor Yellow
+      Write-Host ""
+    } else {
+      # For regular cleanup, fail if Docker commands fail
+      exit $LASTEXITCODE
+    }
+  }
 
   # Build cache is typically the biggest part: optionally clean it after project deep clean
-  if ($Deep) {
+  if ($Deep -and -not $dockerFailed) {
     Confirm-OrExit "Also prune Docker build cache (recommended; frees the most space)?"
     docker builder prune -af
   }
@@ -105,16 +119,22 @@ if (-not [string]::IsNullOrWhiteSpace($Project)) {
 
     Write-Host ""
     Write-Host "Project completely removed: $Project" -ForegroundColor Green
-    Write-Host "  - Docker resources: cleaned"
+    if ($dockerFailed) {
+      Write-Host "  - Docker resources: skipped (Docker not available)"
+    } else {
+      Write-Host "  - Docker resources: cleaned"
+    }
     Write-Host "  - Project folder: deleted"
   } else {
     Write-Host ""
     Write-Host "Project cleanup done: $Project"
   }
 
-  Write-Host ""
-  Write-Host "Disk usage summary:"
-  docker system df
+  if (-not $dockerFailed) {
+    Write-Host ""
+    Write-Host "Disk usage summary:"
+    docker system df
+  }
   exit 0
 }
 
