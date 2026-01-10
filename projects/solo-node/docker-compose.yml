@@ -1,0 +1,144 @@
+services:
+  # ---------- Bitcoin Core (MAINNET) ----------
+  bitcoin-main:
+    image: ruimarinho/bitcoin-core:latest
+    container_name: bitcoind-main
+    restart: unless-stopped
+    volumes:
+      - ${BITCOIN_MAIN_DATA_PATH:-bitcoin-main-data}:/home/bitcoin/.bitcoin
+      - ./bitcoin-main:/etc/bitcoin:ro
+    command: [
+      "bitcoind",
+      "-conf=/etc/bitcoin/bitcoin.conf",
+      "-datadir=/home/bitcoin/.bitcoin",
+      "-printtoconsole"
+    ]
+    ports:
+      - "8333:8333"   # P2P mainnet
+    healthcheck:
+      test: ["CMD-SHELL", "bitcoin-cli -conf=/etc/bitcoin/bitcoin.conf -datadir=/home/bitcoin/.bitcoin getblockchaininfo | grep -q headers"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 15m
+
+  # ---------- Bitcoin Core (TESTNET) ----------
+  bitcoin-testnet:
+    image: ruimarinho/bitcoin-core:latest
+    container_name: bitcoind-testnet
+    restart: unless-stopped
+    volumes:
+      - ${BITCOIN_TESTNET_DATA_PATH:-bitcoin-testnet-data}:/home/bitcoin/.bitcoin
+      - ./bitcoin-testnet:/etc/bitcoin:ro
+    command: [
+      "bitcoind",
+      "-conf=/etc/bitcoin/bitcoin.conf",
+      "-datadir=/home/bitcoin/.bitcoin",
+      "-printtoconsole"
+    ]
+    ports:
+      - "18333:18333"   # P2P testnet
+    healthcheck:
+      test: ["CMD-SHELL", "bitcoin-cli -conf=/etc/bitcoin/bitcoin.conf -datadir=/home/bitcoin/.bitcoin getblockchaininfo | grep -q headers"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 15m
+
+  # ---------- Stratum Proxy (MAINNET) via BFGMiner ----------
+  bfgproxy-main:
+    image: wernight/bfgminer:latest
+    container_name: bfgminer-proxy-mainnet
+    depends_on:
+      ckpool-main:
+        condition: service_started
+    restart: unless-stopped
+    environment:
+      TERM: xterm
+    command: >
+      bfgminer -S noauto
+      -o stratum+tcp://${CKPOOL_MAIN_HOST:-ckpool-solo-main}:${CKPOOL_MAIN_PORT:-3333}
+      -O ${PAYOUT_ADDRESS:-1D7VcBnYgCW6zqNP4NmdS4kia4yLGHNfw}:x
+      --stratum-port 3333 --coinbase-addr ${PAYOUT_ADDRESS:-1D7VcBnYgCW6zqNP4NmdS4kia4yLGHNfw}
+      --no-submit-stale
+    ports:
+      - "3333:3333"   # Stratum mainnet
+
+  # ---------- Stratum Proxy (TESTNET) via BFGMiner ----------
+  bfgproxy-test:
+    image: wernight/bfgminer:latest
+    container_name: bfgminer-proxy-testnet
+    depends_on:
+      ckpool-test:
+        condition: service_started
+    restart: unless-stopped
+    environment:
+      TERM: xterm
+    command: >
+      bfgminer -S noauto
+      -o stratum+tcp://${CKPOOL_TESTNET_HOST:-ckpool-solo-testnet}:${CKPOOL_TESTNET_PORT:-3333}
+      -O ${PAYOUT_ADDRESS_TESTNET:-mzpJE5cWrFzGuVr1SidxEsRBDgFgPC5VmD}:x
+      --stratum-port 13333 --coinbase-addr ${PAYOUT_ADDRESS_TESTNET:-mzpJE5cWrFzGuVr1SidxEsRBDgFgPC5VmD}
+      --no-submit-stale
+    ports:
+      - "13333:13333" # Stratum testnet
+
+  # ---------- CKPool (MAINNET) ----------
+  ckpool-main:
+    build:
+      context: ./ckpool
+    image: local/ckpool-solo
+    pull_policy: never
+    container_name: ckpool-solo-main
+    depends_on:
+      bitcoin-main:
+        condition: service_healthy
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/run-ckpool"]
+    environment:
+      CKPOOL_RPC_HOST: ${BITCOIN_MAIN_RPC_HOST:-bitcoin-main}
+      CKPOOL_RPC_PORT: ${BITCOIN_MAIN_RPC_PORT:-8332}
+      CKPOOL_RPC_USER: ${RPC_USER:-rpcuser_main}
+      CKPOOL_RPC_PASSWORD: ${RPC_PASSWORD:-rpcpass_main}
+      CKPOOL_PAYOUT_ADDRESS: ${PAYOUT_ADDRESS:-1D7VcBnYgCW6zqNP4NmdS4kia4yLGHNfw}
+      CKPOOL_SIGNATURE: "/Solo via ckpool/"
+      CKPOOL_BLOCKPOLL: 100
+      CKPOOL_NONCE1_LENGTH: 4
+      CKPOOL_NONCE2_LENGTH: 8
+      CKPOOL_UPDATE_INTERVAL: 30
+      CKPOOL_MINDIFF: 1
+      CKPOOL_STARTDIFF: 32
+    ports:
+      - "3334:3333"   # expose as 3334 (container listens 3333)
+
+  # ---------- CKPool (TESTNET) ----------
+  ckpool-test:
+    build:
+      context: ./ckpool
+    image: local/ckpool-solo
+    pull_policy: never
+    container_name: ckpool-solo-testnet
+    depends_on:
+      bitcoin-testnet:
+        condition: service_healthy
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/run-ckpool"]
+    environment:
+      CKPOOL_RPC_HOST: ${BITCOIN_TESTNET_RPC_HOST:-bitcoin-testnet}
+      CKPOOL_RPC_PORT: ${BITCOIN_TESTNET_RPC_PORT:-18332}
+      CKPOOL_RPC_USER: ${RPC_USER_TESTNET:-rpcuser_test}
+      CKPOOL_RPC_PASSWORD: ${RPC_PASSWORD_TESTNET:-rpcpass_test}
+      CKPOOL_PAYOUT_ADDRESS: ${PAYOUT_ADDRESS_TESTNET:-mzpJE5cWrFzGuVr1SidxEsRBDgFgPC5VmD}
+      CKPOOL_SIGNATURE: "/Solo via ckpool/"
+      CKPOOL_BLOCKPOLL: 100
+      CKPOOL_NONCE1_LENGTH: 4
+      CKPOOL_NONCE2_LENGTH: 8
+      CKPOOL_UPDATE_INTERVAL: 30
+      CKPOOL_MINDIFF: 1
+      CKPOOL_STARTDIFF: 32
+    ports:
+      - "13334:3333"  # expose as 13334 (container listens 3333)
+
+volumes:
+  bitcoin-main-data:
+  bitcoin-testnet-data:

@@ -1,0 +1,22 @@
+docker compose up -d --build --force-recreate
+docker compose up --build --force-recreate
+docker compose build ckpool-main --no-cache
+
+docker compose up -d
+
+docker compose up --build
+
+docker logs -f bitcoind-main
+docker logs -f bitcoind-testnet
+
+Mainnet RPC: docker compose exec bitcoind-main bitcoin-cli -getinfo
+
+Testnet RPC: docker compose exec bitcoind-testnet bitcoin-cli -getinfo
+
+Pool health: docker compose logs ckpool-solo-main | tail -n 40
+
+docker compose logs --tail=50 -f
+
+docker compose exec bitcoin-main bitcoin-cli getblockchaininfo
+
+docker compose exec bitcoin-main bitcoind-testnet getblockchaininfo
