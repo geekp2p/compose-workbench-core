@@ -372,9 +372,13 @@ function Remove-Project {
 
     # Call clean.ps1 with -RemoveProject
     $cleanScript = Join-Path $root "clean.ps1"
-    $cleanParams = @("-Project", $Name, "-Deep", "-RemoveProject")
+    $cleanParams = @{
+        Project = $Name
+        Deep = $true
+        RemoveProject = $true
+    }
     if ($Force) {
-        $cleanParams += "-Force"
+        $cleanParams.Force = $true
     }
 
     & $cleanScript @cleanParams
