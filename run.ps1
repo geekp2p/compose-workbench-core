@@ -372,12 +372,12 @@ function Remove-Project {
 
     # Call clean.ps1 with -RemoveProject
     $cleanScript = Join-Path $root "clean.ps1"
-    $args = @("-Project", $Name, "-Deep", "-RemoveProject")
+    $cleanParams = @("-Project", $Name, "-Deep", "-RemoveProject")
     if ($Force) {
-        $args += "-Force"
+        $cleanParams += "-Force"
     }
 
-    & $cleanScript @args
+    & $cleanScript @cleanParams
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""
