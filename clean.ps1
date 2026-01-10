@@ -1,3 +1,5 @@
+using module .\common.psm1
+
 param(
   [string]$Project = "",
   [switch]$Deep,
@@ -24,12 +26,7 @@ function Confirm-OrExit([string]$Message) {
   }
 }
 
-function Show-Projects([string]$Root) {
-  Write-Host "Available projects:"
-  Get-ChildItem (Join-Path $Root "projects") -Directory | ForEach-Object { " - " + $_.Name }
-}
-
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$root = Get-ScriptRoot
 
 # Validate parameters
 if ($All -and $Project) {
@@ -53,13 +50,11 @@ if (-not $All -and [string]::IsNullOrWhiteSpace($Project)) {
 # ------------------------------------------------------------
 if (-not [string]::IsNullOrWhiteSpace($Project)) {
 
-  $composePath = Join-Path $root ("projects\" + $Project + "\compose.yml")
-
-  if (!(Test-Path $composePath)) {
-    Write-Host "Unknown project: $Project"
-    Show-Projects $root
+  if (!(Test-ProjectExists -Root $root -Project $Project -ShowError)) {
     exit 1
   }
+
+  $composePath = Get-ProjectComposePath -Root $root -Project $Project
 
   if ($Deep) {
     Confirm-OrExit "This will remove containers/network AND local images+volumes for project '$Project'. Continue?"
