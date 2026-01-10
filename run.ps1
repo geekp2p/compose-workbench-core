@@ -304,6 +304,7 @@ services:
     Write-Host "  2. View logs:          docker compose -f projects\$Name\compose.yml -p $Name logs -f"
     Write-Host "  3. Test endpoint:      curl http://localhost:$HostPort"
     Write-Host "  4. Stop the project:   .\down.ps1 $Name"
+    Write-Host "  5. Clean & remove:     .\run.ps1 remove $Name"
     Write-Host ""
 }
 
