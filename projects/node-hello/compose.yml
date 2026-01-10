@@ -1,0 +1,9 @@
+name: node-hello
+services:
+  web:
+    build: .
+    ports:
+      - "${HOST_PORT:-8003}:3000"
+    environment:
+      - PORT=3000
+    restart: unless-stopped

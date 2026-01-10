@@ -1,0 +1,63 @@
+.\up.ps1 py-hello -Build
+.\up.ps1 go-hello -Build
+.\up.ps1 node-hello -Build
+.\\up.ps1 solo-node -Build
+
+
+docker compose -f .\projects\py-hello\compose.yml -p py-hello up -d --build
+docker compose -f .\projects\py-hello\compose.yml -p py-hello down
+
+.\clean.ps1 -Project go-hello
+.\clean.ps1 -Project go-hello -Deep
+.\clean.ps1 -All
+.\clean.ps1 -All -Deep
+เช็คว่ากินพื้นที่เท่าไหร่ก่อน/หลังล้าง
+docker system df
+docker system df -v
+wsl --shutdown
+
+
+.\clean.ps1 -Project go-hello -Deep -Force
+
+cmd
+clean.cmd project go-hello deep force
+
+docker builder prune -af
+
+docker builder prune -af
+docker system prune -af
+
+
+C) เช็คว่าพื้นที่ไปอยู่ไหนก่อนล้างทุกครั้ง
+docker system df -v
+
+.\clean.ps1 -Project py-hello -Deep -Force
+.\clean.ps1 -Project node-hello -Deep -Force
+
+.\\up.ps1 solo-node
+.\\down.ps1 solo-node
+
+
+docker compose -f .\projects\solo-node\compose.yml -p solo-node logs -f bitcoind-main
+docker compose -f .\projects\solo-node\compose.yml -p solo-node logs -f ckpool-solo-main
+docker compose -f .\projects\solo-node\compose.yml -p solo-node logs -f bitcoind-testnet
+docker compose -f .\projects\solo-node\compose.yml -p solo-node logs -f ckpool-solo-testnet
+
+
+cd projects\solo-node
+
+cd projects\solo-node
+docker compose up -d
+docker compose down
+
+docker logs -f bitcoind-main
+docker logs -f bitcoind-testnet
+
+
+docker compose -f projects/solo-node/compose.yml up -d
+
+docker logs -f bitcoind-main
+docker logs -f bitcoind-testnet
+
+.\up.ps1 solo-node -Build
+
