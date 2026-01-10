@@ -1,17 +1,17 @@
+using module .\common.psm1
+
 param(
   [Parameter(Mandatory=$true)][string]$Project,
   [switch]$Build
 )
 
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$composePath = Join-Path $root ("projects\" + $Project + "\compose.yml")
+$root = Get-ScriptRoot
 
-if (!(Test-Path $composePath)) {
-  Write-Host "Unknown project: $Project"
-  Write-Host "Available projects:"
-  Get-ChildItem (Join-Path $root "projects") -Directory | ForEach-Object { " - " + $_.Name }
+if (!(Test-ProjectExists -Root $root -Project $Project -ShowError)) {
   exit 1
 }
+
+$composePath = Get-ProjectComposePath -Root $root -Project $Project
 
 $args = @("-f", $composePath, "-p", $Project, "up", "-d")
 if ($Build) { $args += "--build" }

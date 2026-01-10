@@ -47,41 +47,21 @@ if /I "%MODE%"=="project" (
     exit /b 1
   )
 
-  if defined DEEP (
-    if defined FORCE (
-      powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -Project "%ARG%" -Deep -Force
-    ) else (
-      powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -Project "%ARG%" -Deep
-    )
-  ) else (
-    if defined FORCE (
-      powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -Project "%ARG%" -Force
-    ) else (
-      powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -Project "%ARG%"
-    )
-  )
-
-  exit /b %ERRORLEVEL%
+  set "PS_ARGS=-Project "%ARG%""
+  goto :invoke_ps
 )
 
 if /I "%MODE%"=="all" (
-  if defined DEEP (
-    if defined FORCE (
-      powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -All -Deep -Force
-    ) else (
-      powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -All -Deep
-    )
-  ) else (
-    if defined FORCE (
-      powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -All -Force
-    ) else (
-      powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -All
-    )
-  )
-
-  exit /b %ERRORLEVEL%
+  set "PS_ARGS=-All"
+  goto :invoke_ps
 )
 
 echo Unknown mode: %MODE%
 echo Usage: clean.cmd ^(project ^<name^> [deep] [force]^|all [deep] [force]^)
 exit /b 1
+
+:invoke_ps
+if defined DEEP set "PS_ARGS=%PS_ARGS% -Deep"
+if defined FORCE set "PS_ARGS=%PS_ARGS% -Force"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" %PS_ARGS%
+exit /b %ERRORLEVEL%

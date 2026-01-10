@@ -1,14 +1,16 @@
+using module .\common.psm1
+
 param(
   [Parameter(Mandatory=$true)][string]$Project
 )
 
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$composePath = Join-Path $root ("projects\" + $Project + "\compose.yml")
+$root = Get-ScriptRoot
 
-if (!(Test-Path $composePath)) {
-  Write-Host "Unknown project: $Project"
+if (!(Test-ProjectExists -Root $root -Project $Project -ShowError)) {
   exit 1
 }
+
+$composePath = Get-ProjectComposePath -Root $root -Project $Project
 
 docker compose -f $composePath -p $Project down
 exit $LASTEXITCODE
