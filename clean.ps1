@@ -4,7 +4,8 @@ param(
   [string]$Project = "",
   [switch]$Deep,
   [switch]$All,
-  [switch]$Force
+  [switch]$Force,
+  [switch]$RemoveProject
 )
 
 # ============================================================
@@ -36,13 +37,31 @@ if ($All -and $Project) {
 
 if (-not $All -and [string]::IsNullOrWhiteSpace($Project)) {
   Write-Host "Usage:"
-  Write-Host "  .\clean.ps1 -Project go-hello                  # stop/remove containers+network"
-  Write-Host "  .\clean.ps1 -Project go-hello -Deep            # + remove local images + volumes"
-  Write-Host "  .\clean.ps1 -All                               # prune unused (safe-ish)"
-  Write-Host "  .\clean.ps1 -All -Deep                         # + prune volumes (destructive)"
-  Write-Host "  .\clean.ps1 -All -Force                        # no prompt"
-  Write-Host "  .\clean.ps1 -Project go-hello -Deep -Force     # no prompt"
+  Write-Host "  .\clean.ps1 -Project go-hello                        # stop/remove containers+network"
+  Write-Host "  .\clean.ps1 -Project go-hello -Deep                  # + remove local images + volumes"
+  Write-Host "  .\clean.ps1 -Project go-hello -Deep -RemoveProject   # + delete project folder"
+  Write-Host "  .\clean.ps1 -All                                     # prune unused (safe-ish)"
+  Write-Host "  .\clean.ps1 -All -Deep                               # + prune volumes (destructive)"
+  Write-Host "  .\clean.ps1 -All -Force                              # no prompt"
+  Write-Host "  .\clean.ps1 -Project go-hello -Deep -Force           # no prompt"
   exit 1
+}
+
+# Validate -RemoveProject usage
+if ($RemoveProject) {
+  if ($All) {
+    Write-Host "Error: -RemoveProject can only be used with -Project, not -All."
+    exit 1
+  }
+  if ([string]::IsNullOrWhiteSpace($Project)) {
+    Write-Host "Error: -RemoveProject requires -Project to be specified."
+    exit 1
+  }
+  # Force -Deep when removing project
+  if (-not $Deep) {
+    Write-Host "Note: -RemoveProject implies -Deep (cleaning all Docker resources first)."
+    $Deep = $true
+  }
 }
 
 # ------------------------------------------------------------
@@ -71,8 +90,29 @@ if (-not [string]::IsNullOrWhiteSpace($Project)) {
     docker builder prune -af
   }
 
+  # Remove project folder if requested
+  if ($RemoveProject) {
+    $projectPath = Join-Path $root "projects" $Project
+    Confirm-OrExit "DELETE project folder at $projectPath ?"
+
+    Write-Host "Removing project folder: $projectPath"
+    Remove-Item -Path $projectPath -Recurse -Force
+
+    if (Test-Path $projectPath) {
+      Write-Host "Error: Failed to remove project folder." -ForegroundColor Red
+      exit 1
+    }
+
+    Write-Host ""
+    Write-Host "Project completely removed: $Project" -ForegroundColor Green
+    Write-Host "  - Docker resources: cleaned"
+    Write-Host "  - Project folder: deleted"
+  } else {
+    Write-Host ""
+    Write-Host "Project cleanup done: $Project"
+  }
+
   Write-Host ""
-  Write-Host "Project cleanup done: $Project"
   Write-Host "Disk usage summary:"
   docker system df
   exit 0

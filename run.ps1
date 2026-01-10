@@ -7,7 +7,7 @@ using module .\common.psm1
 
 param(
   [Parameter(Mandatory=$true, Position=0)]
-  [ValidateSet("new", "list")]
+  [ValidateSet("new", "list", "remove", "delete")]
   [string]$Command,
 
   [Parameter(Position=1)]
@@ -18,7 +18,10 @@ param(
   [string]$Lang,
 
   [Parameter()]
-  [int]$Port = 0
+  [int]$Port = 0,
+
+  [Parameter()]
+  [switch]$Force
 )
 
 $root = Get-ScriptRoot
@@ -343,6 +346,48 @@ function Show-Projects {
     Write-Host ""
 }
 
+function Remove-Project {
+    param(
+        [string]$Name,
+        [switch]$Force
+    )
+
+    # Check if project exists
+    $projectPath = Join-Path $projectsDir $Name
+    if (!(Test-Path $projectPath)) {
+        Write-Host "Error: Project '$Name' does not exist." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "Removing project: $Name" -ForegroundColor Yellow
+    Write-Host "  Location: $projectPath"
+    Write-Host ""
+    Write-Host "This will:" -ForegroundColor Cyan
+    Write-Host "  1. Stop and remove all Docker containers"
+    Write-Host "  2. Remove Docker images and volumes"
+    Write-Host "  3. Clean build cache"
+    Write-Host "  4. DELETE the project folder"
+    Write-Host ""
+
+    # Call clean.ps1 with -RemoveProject
+    $cleanScript = Join-Path $root "clean.ps1"
+    $args = @("-Project", $Name, "-Deep", "-RemoveProject")
+    if ($Force) {
+        $args += "-Force"
+    }
+
+    & $cleanScript @args
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host ""
+        Write-Host "Project '$Name' has been completely removed." -ForegroundColor Green
+    } else {
+        Write-Host ""
+        Write-Host "Error: Failed to remove project '$Name'." -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
+}
+
 # ============================================================
 # Main command routing
 # ============================================================
@@ -368,9 +413,19 @@ switch ($Command) {
         Show-Projects
     }
 
+    { $_ -in @("remove", "delete") } {
+        if (-not $ProjectName) {
+            Write-Host "Error: Project name is required." -ForegroundColor Red
+            Write-Host "Usage: .\run.ps1 remove <project-name> [-Force]" -ForegroundColor Yellow
+            exit 1
+        }
+
+        Remove-Project -Name $ProjectName -Force:$Force
+    }
+
     default {
         Write-Host "Unknown command: $Command" -ForegroundColor Red
-        Write-Host "Available commands: new, list" -ForegroundColor Yellow
+        Write-Host "Available commands: new, list, remove" -ForegroundColor Yellow
         exit 1
     }
 }
