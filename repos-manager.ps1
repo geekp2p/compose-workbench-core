@@ -342,7 +342,7 @@ Write-Host "  .\repos-manager.ps1 -List" -ForegroundColor Yellow
 Write-Host "  .\repos-manager.ps1 -GitStatus" -ForegroundColor Yellow
 Write-Host "  .\repos-manager.ps1 -GitPull" -ForegroundColor Yellow
 Write-Host "  .\repos-manager.ps1 -GitPush" -ForegroundColor Yellow
-Write-Host "  .\repos-manager.ps1 -Command `"git status`"" -ForegroundColor Yellow
+Write-Host '  .\repos-manager.ps1 -Command "git status"' -ForegroundColor Yellow
 Write-Host ""
 
 Write-Info "Examples:"
@@ -356,7 +356,7 @@ Write-Host "  Pull all repos:" -ForegroundColor Cyan
 Write-Host "    .\repos-manager.ps1 -GitPull" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Custom command:" -ForegroundColor Cyan
-Write-Host "    .\repos-manager.ps1 -Command `"docker compose ps`"" -ForegroundColor Gray
+Write-Host '    .\repos-manager.ps1 -Command "docker compose ps"' -ForegroundColor Gray
 Write-Host ""
 
 exit 0
