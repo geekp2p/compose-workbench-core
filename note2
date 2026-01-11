@@ -1,0 +1,48 @@
+### Quick command reference
+- **Start everything (already built):** `.\up.ps1 solo-node`
+- **Start everything and rebuild:** `.\up.ps1 solo-node -Build`
+- **Stop containers:** `.\down.ps1 solo-node`
+- **Remove containers + networks:** `.\down.ps1 solo-node -Remove`
+- **Delete images/volumes as well:** `.\clean.ps1 -Project solo-node -Deep`
+
+You can also run Docker Compose directly from `projects/solo-node`:
+
+```powershell
+docker compose up -d                   # start all services
+docker compose up -d --build           # rebuild then start
+docker compose up -d bitcoin-main ckpool-main           # start only mainnet pair
+docker compose up -d bitcoin-testnet ckpool-test        # start only testnet pair
+docker compose down                    # stop and remove containers/networks
+```
+
+### Viewing logs
+Use the **service names** from the compose file when tailing logs. They are
+`bitcoin-main`, `bitcoin-testnet`, `ckpool-main`, and `ckpool-test` (container
+names such as `bitcoind-main` appear in `docker ps`, but Compose commands use
+the service names).
+
+```powershell
+docker compose logs -f bitcoin-main
+docker compose logs -f ckpool-main
+docker compose logs -f bitcoin-testnet
+docker compose logs -f ckpool-test
+```
+
+When you prefer to stay in the repository root instead of `projects/solo-node`,
+give Docker Compose the compose file path and project name explicitly:
+
+```powershell
+docker compose -f .\projects\solo-node\compose.yml -p solo-node logs -f bitcoin-main
+docker compose -f .\projects\solo-node\compose.yml -p solo-node logs -f ckpool-main
+docker compose -f .\projects\solo-node\compose.yml -p solo-node logs -f bitcoin-testnet
+docker compose -f .\projects\solo-node\compose.yml -p solo-node logs -f ckpool-test
+```
+
+If you started the stack via `.\up.ps1`, the same service names apply when
+using `docker logs -f <service>`.
+
+## Notes
+- The `clean.ps1`/`clean.cmd` scripts in `multi-compose-lab` already handle
+  per-project cleanup; no changes are needed.
+- If you update the `solo-node` repo later, rerun the `robocopy` command to sync
+  the project folder and rebuild with `up.ps1 solo-node -Build`.
