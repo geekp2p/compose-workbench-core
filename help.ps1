@@ -7,7 +7,7 @@ using module .\common.psm1
 
 param(
   [Parameter(Position=0)]
-  [ValidateSet("", "start", "stop", "clean", "new", "list", "remove")]
+  [ValidateSet("", "start", "stop", "clean", "new", "list", "remove", "services")]
   [string]$Topic = ""
 )
 
@@ -54,6 +54,7 @@ function Show-MainCommands {
   Write-Host "  Docker Operations:" -ForegroundColor Cyan
   Write-Host "    .\up.ps1 <project> [-Build]" -ForegroundColor White
   Write-Host "      Start a project (use -Build for first time or after code changes)"
+  Write-Host "      Note: Starts ALL services in the project. See .\help.ps1 services" -ForegroundColor DarkGray
   Write-Host ""
   Write-Host "    .\down.ps1 <project>" -ForegroundColor White
   Write-Host "      Stop a running project"
@@ -141,8 +142,8 @@ function Show-AvailableProjects {
 
   Write-Host "Available Projects:" -ForegroundColor Green
   Write-Host ""
-  Write-Host ("  {0,-20} {1,-10} {2}" -f "Name", "Language", "Port") -ForegroundColor Cyan
-  Write-Host ("  {0,-20} {1,-10} {2}" -f "----", "--------", "----") -ForegroundColor DarkGray
+  Write-Host ("  {0,-20} {1,-10} {2,-10} {3}" -f "Name", "Language", "Port", "Services") -ForegroundColor Cyan
+  Write-Host ("  {0,-20} {1,-10} {2,-10} {3}" -f "----", "--------", "----", "--------") -ForegroundColor DarkGray
 
   foreach ($proj in $projects) {
     $composePath = Join-Path $proj.FullName "compose.yml"
@@ -155,13 +156,23 @@ function Show-AvailableProjects {
         $port = $Matches[1]
       }
 
+      # Count services (extract only services section, then count service names excluding x- anchors)
+      $serviceCount = 0
+      if ($content -match '(?ms)^services:\s*\r?\n(.*?)(?=^[a-z]|\z)') {
+        $servicesSection = $Matches[1]
+        # Count service definitions (lines that start with 2 spaces and alphanumeric name followed by colon, excluding x- anchors)
+        $serviceMatches = [regex]::Matches($servicesSection, '(?m)^  (?!x-)([a-zA-Z0-9_-]+):\s*$')
+        $serviceCount = $serviceMatches.Count
+      }
+
       # Detect language
       $lang = "?"
       if (Test-Path (Join-Path $proj.FullName "go.mod")) { $lang = "go" }
       elseif (Test-Path (Join-Path $proj.FullName "package.json")) { $lang = "node" }
       elseif (Test-Path (Join-Path $proj.FullName "requirements.txt")) { $lang = "python" }
 
-      Write-Host ("  {0,-20} {1,-10} {2}" -f $proj.Name, $lang, $port) -ForegroundColor White
+      $servicesInfo = if ($serviceCount -gt 1) { "$serviceCount" } else { "1" }
+      Write-Host ("  {0,-20} {1,-10} {2,-10} {3}" -f $proj.Name, $lang, $port, $servicesInfo) -ForegroundColor White
     }
   }
   Write-Host ""
@@ -299,6 +310,62 @@ function Show-TopicHelp {
       Write-Host "    Make sure to backup any important code first." -ForegroundColor Red
       Write-Host ""
     }
+
+    "services" {
+      Write-Host "Running Individual Services:" -ForegroundColor Green
+      Write-Host ""
+      Write-Host "  Projects with Multiple Services:" -ForegroundColor Cyan
+      Write-Host "    Some projects contain multiple Docker services (containers)." -ForegroundColor White
+      Write-Host "    For example, 'solo-node' has 6 services:" -ForegroundColor White
+      Write-Host "      - bitcoin-main, bitcoin-testnet (Bitcoin nodes)" -ForegroundColor DarkGray
+      Write-Host "      - ckpool-main, ckpool-test (Mining pools)" -ForegroundColor DarkGray
+      Write-Host "      - bfgproxy-main, bfgproxy-test (Mining proxies)" -ForegroundColor DarkGray
+      Write-Host ""
+      Write-Host "  Default Behavior:" -ForegroundColor Cyan
+      Write-Host "    .\up.ps1 <project>      # Starts ALL services in the project" -ForegroundColor White
+      Write-Host "    .\down.ps1 <project>    # Stops ALL services in the project" -ForegroundColor White
+      Write-Host ""
+      Write-Host "  Running Specific Services:" -ForegroundColor Cyan
+      Write-Host "    Use docker compose directly to control individual services:" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Start only specific services" -ForegroundColor Yellow
+      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> up -d <service1> <service2>" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Stop specific services" -ForegroundColor Yellow
+      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> stop <service1> <service2>" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Remove specific services" -ForegroundColor Yellow
+      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> rm -f <service1> <service2>" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # View logs for specific service" -ForegroundColor Yellow
+      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> logs -f <service>" -ForegroundColor White
+      Write-Host ""
+      Write-Host "  Examples for solo-node:" -ForegroundColor Cyan
+      Write-Host ""
+      Write-Host "    # Start only mainnet Bitcoin node" -ForegroundColor Yellow
+      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node up -d bitcoin-main" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Start mainnet stack (node + pool + proxy)" -ForegroundColor Yellow
+      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node up -d bitcoin-main ckpool-main bfgproxy-main" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Start testnet stack only" -ForegroundColor Yellow
+      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node up -d bitcoin-testnet ckpool-test bfgproxy-test" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # View logs for Bitcoin mainnet" -ForegroundColor Yellow
+      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node logs -f bitcoin-main" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Stop only testnet services" -ForegroundColor Yellow
+      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node stop bitcoin-testnet ckpool-test bfgproxy-test" -ForegroundColor White
+      Write-Host ""
+      Write-Host "  List Services in a Project:" -ForegroundColor Cyan
+      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> ps" -ForegroundColor White
+      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> config --services" -ForegroundColor White
+      Write-Host ""
+      Write-Host "  Note on Dependencies:" -ForegroundColor Yellow
+      Write-Host "    Some services depend on others (e.g., ckpool-main depends on bitcoin-main)." -ForegroundColor White
+      Write-Host "    Docker Compose will automatically start required dependencies." -ForegroundColor White
+      Write-Host ""
+    }
   }
 }
 
@@ -333,7 +400,7 @@ function Show-Footer {
   Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
   Write-Host ""
   Write-Host "  For more help on a specific topic:" -ForegroundColor DarkGray
-  Write-Host "    .\help.ps1 <topic>  (start|stop|clean|new|list|remove)" -ForegroundColor DarkGray
+  Write-Host "    .\help.ps1 <topic>  (start|stop|clean|new|list|remove|services)" -ForegroundColor DarkGray
   Write-Host ""
   Write-Host "  Project repository: multi-compose-lab" -ForegroundColor DarkGray
   Write-Host ""
