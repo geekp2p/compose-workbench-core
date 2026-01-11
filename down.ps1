@@ -1,7 +1,8 @@
 using module .\common.psm1
 
 param(
-  [Parameter(Mandatory=$true)][string]$Project
+  [Parameter(Mandatory=$true)][string]$Project,
+  [string[]]$Services      # Array of specific service names to stop
 )
 
 $root = Get-ScriptRoot
@@ -12,5 +13,16 @@ if (!(Test-ProjectExists -Root $root -Project $Project -ShowError)) {
 
 $composePath = Get-ProjectComposePath -Root $root -Project $Project
 
-docker compose -f $composePath -p $Project down
-exit $LASTEXITCODE
+if ($Services) {
+  # Stop and remove specific services
+  Write-Host "Stopping services: $($Services -join ', ') in project: $Project"
+  docker compose -f $composePath -p $Project stop $Services
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  docker compose -f $composePath -p $Project rm -f $Services
+  exit $LASTEXITCODE
+} else {
+  # Stop and remove entire project
+  docker compose -f $composePath -p $Project down
+  exit $LASTEXITCODE
+}
