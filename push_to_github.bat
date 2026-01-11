@@ -14,6 +14,10 @@ if "%BRANCH%"=="" (
 )
 if "%BRANCH%"=="" set BRANCH=main
 
+rem Check for uncommitted changes before pushing
+call :check_uncommitted_changes
+if %ERRORLEVEL% EQU 2 exit /b 0
+
 echo Pushing local branch to %REMOTE%/%BRANCH% ...
 git remote get-url %REMOTE% >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
@@ -51,6 +55,68 @@ for /L %%i in (2,1,%RETRY_COUNT%) do set /a DELAY*=2
 echo Push failed, retrying in %DELAY% seconds (attempt %RETRY_COUNT%/%MAX_RETRIES%)...
 timeout /t %DELAY% /nobreak >nul
 goto retry_loop
+
+:check_uncommitted_changes
+rem Check for uncommitted changes and display summary
+rem Returns 0 to continue, 2 to cancel
+
+rem Check if there are any uncommitted changes (staged or unstaged)
+git diff-index --quiet HEAD -- 2>nul
+if %ERRORLEVEL% EQU 0 (
+  rem No changes, continue
+  exit /b 0
+)
+
+echo.
+echo === WARNING: UNCOMMITTED CHANGES ===
+echo.
+
+rem Count changes by type
+set /a ADDED=0
+set /a MODIFIED=0
+set /a DELETED=0
+set /a UNTRACKED=0
+
+rem Check unstaged changes (modified/deleted files not yet added)
+for /f "tokens=1,2" %%a in ('git diff --name-status 2^>nul') do (
+  if "%%a"=="M" set /a MODIFIED+=1
+  if "%%a"=="D" set /a DELETED+=1
+  if "%%a"=="A" set /a ADDED+=1
+  echo  %%a  %%b
+)
+
+rem Check staged changes (added to index but not committed)
+for /f "tokens=1,2" %%a in ('git diff --cached --name-status 2^>nul') do (
+  if "%%a"=="M" set /a MODIFIED+=1
+  if "%%a"=="D" set /a DELETED+=1
+  if "%%a"=="A" set /a ADDED+=1
+  echo  %%a  %%b (staged)
+)
+
+rem Check untracked files
+for /f "delims=" %%f in ('git ls-files --others --exclude-standard 2^>nul') do (
+  set /a UNTRACKED+=1
+  echo  ?  %%f (untracked)
+)
+
+echo.
+echo Summary:
+if %ADDED% GTR 0 echo   - Added: %ADDED% file(s)
+if %MODIFIED% GTR 0 echo   - Modified: %MODIFIED% file(s)
+if %DELETED% GTR 0 echo   - Deleted: %DELETED% file(s)
+if %UNTRACKED% GTR 0 echo   - Untracked: %UNTRACKED% file(s)
+echo.
+echo These changes will NOT be pushed to remote.
+echo You need to commit them first with: git add . ^&^& git commit -m "message"
+echo.
+echo ======================================
+echo.
+
+set /p "CONTINUE=Continue push anyway? (y/N): "
+if /i "%CONTINUE%"=="y" exit /b 0
+
+echo Push cancelled.
+exit /b 2
 
 :add_remote
 set ADD_REMOTE_NAME=%1
