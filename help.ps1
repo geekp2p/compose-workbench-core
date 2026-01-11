@@ -187,14 +187,24 @@ function Show-TopicHelp {
       Write-Host "Starting Projects (up.ps1):" -ForegroundColor Green
       Write-Host ""
       Write-Host "  Usage:" -ForegroundColor Cyan
-      Write-Host "    .\up.ps1 <project-name> [-Build]" -ForegroundColor White
+      Write-Host "    .\up.ps1 <project-name> [-Build] [-Services <list>] [-Profiles <list>]" -ForegroundColor White
       Write-Host ""
       Write-Host "  Parameters:" -ForegroundColor Cyan
-      Write-Host "    -Build      Build/rebuild the Docker image before starting" -ForegroundColor White
+      Write-Host "    -Build      Build/rebuild Docker images before starting" -ForegroundColor White
+      Write-Host "    -Services   Start only specific services (comma-separated)" -ForegroundColor White
+      Write-Host "    -Profiles   Activate specific profiles (comma-separated)" -ForegroundColor White
       Write-Host ""
       Write-Host "  Examples:" -ForegroundColor Cyan
-      Write-Host "    .\up.ps1 my-app -Build    # First time or after code changes" -ForegroundColor White
-      Write-Host "    .\up.ps1 my-app           # Start existing container" -ForegroundColor White
+      Write-Host "    # Single-service projects" -ForegroundColor Yellow
+      Write-Host "    .\up.ps1 my-app -Build          # First time or after code changes" -ForegroundColor White
+      Write-Host "    .\up.ps1 my-app                 # Start existing container" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Multi-service projects" -ForegroundColor Yellow
+      Write-Host "    .\up.ps1 web-stack -Build       # Start all services" -ForegroundColor White
+      Write-Host "    .\up.ps1 web-stack -Services db,api -Build  # Start only db and api" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Using profiles" -ForegroundColor Yellow
+      Write-Host "    .\up.ps1 microservices -Profiles core,gateway" -ForegroundColor White
       Write-Host ""
       Write-Host "  After starting, access your app at:" -ForegroundColor Yellow
       Write-Host "    http://localhost:<port>   # Port shown in .\run.ps1 list" -ForegroundColor White
@@ -205,16 +215,30 @@ function Show-TopicHelp {
       Write-Host "Stopping Projects (down.ps1):" -ForegroundColor Green
       Write-Host ""
       Write-Host "  Usage:" -ForegroundColor Cyan
-      Write-Host "    .\down.ps1 <project-name>" -ForegroundColor White
+      Write-Host "    .\down.ps1 <project-name> [-Services <list>]" -ForegroundColor White
+      Write-Host ""
+      Write-Host "  Parameters:" -ForegroundColor Cyan
+      Write-Host "    -Services   Stop only specific services (comma-separated)" -ForegroundColor White
       Write-Host ""
       Write-Host "  What it does:" -ForegroundColor Cyan
-      Write-Host "    - Stops running containers" -ForegroundColor White
-      Write-Host "    - Removes containers" -ForegroundColor White
-      Write-Host "    - Keeps images and volumes (for quick restart)" -ForegroundColor White
+      Write-Host "    Without -Services:" -ForegroundColor White
+      Write-Host "      - Stops ALL running containers" -ForegroundColor DarkGray
+      Write-Host "      - Removes containers and networks" -ForegroundColor DarkGray
+      Write-Host "      - Keeps images and volumes (for quick restart)" -ForegroundColor DarkGray
+      Write-Host ""
+      Write-Host "    With -Services:" -ForegroundColor White
+      Write-Host "      - Stops only specified containers" -ForegroundColor DarkGray
+      Write-Host "      - Removes only those containers" -ForegroundColor DarkGray
+      Write-Host "      - Keeps other services running" -ForegroundColor DarkGray
       Write-Host ""
       Write-Host "  Examples:" -ForegroundColor Cyan
+      Write-Host "    # Stop entire project" -ForegroundColor Yellow
       Write-Host "    .\down.ps1 my-app" -ForegroundColor White
-      Write-Host "    .\down.ps1 go-service" -ForegroundColor White
+      Write-Host "    .\down.ps1 web-stack" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Stop specific services only" -ForegroundColor Yellow
+      Write-Host "    .\down.ps1 web-stack -Services web" -ForegroundColor White
+      Write-Host "    .\down.ps1 web-stack -Services web,api" -ForegroundColor White
       Write-Host ""
     }
 
@@ -245,10 +269,20 @@ function Show-TopicHelp {
       Write-Host "Creating New Projects (run.ps1 new):" -ForegroundColor Green
       Write-Host ""
       Write-Host "  Usage:" -ForegroundColor Cyan
-      Write-Host "    .\run.ps1 new <project-name> -Lang <go|node|python> [-Port <port>]" -ForegroundColor White
+      Write-Host "    .\run.ps1 new <project-name> -Lang <template> [-Port <port>]" -ForegroundColor White
+      Write-Host ""
+      Write-Host "  Templates:" -ForegroundColor Cyan
+      Write-Host "    Single-service templates:" -ForegroundColor White
+      Write-Host "      go           - Go HTTP server (single container)" -ForegroundColor DarkGray
+      Write-Host "      node         - Node.js server (single container)" -ForegroundColor DarkGray
+      Write-Host "      python       - Python Flask server (single container)" -ForegroundColor DarkGray
+      Write-Host ""
+      Write-Host "    Multi-service templates:" -ForegroundColor White
+      Write-Host "      web-stack    - Node.js + Python API + PostgreSQL (3 containers)" -ForegroundColor DarkGray
+      Write-Host "      microservice - Go service + Redis (2 containers)" -ForegroundColor DarkGray
       Write-Host ""
       Write-Host "  Parameters:" -ForegroundColor Cyan
-      Write-Host "    -Lang       Language: go, node, or python (required)" -ForegroundColor White
+      Write-Host "    -Lang       Template name (required)" -ForegroundColor White
       Write-Host "    -Port       Host port (optional, auto-assigned if not specified)" -ForegroundColor White
       Write-Host ""
       Write-Host "  Project name rules:" -ForegroundColor Cyan
@@ -256,15 +290,26 @@ function Show-TopicHelp {
       Write-Host "    - No spaces or special characters" -ForegroundColor White
       Write-Host ""
       Write-Host "  Examples:" -ForegroundColor Cyan
-      Write-Host "    .\run.ps1 new my-api -Lang node           # Auto port (8001+)" -ForegroundColor White
+      Write-Host "    # Single-service projects" -ForegroundColor Yellow
+      Write-Host "    .\run.ps1 new my-api -Lang node" -ForegroundColor White
       Write-Host "    .\run.ps1 new go-service -Lang go -Port 9000" -ForegroundColor White
-      Write-Host "    .\run.ps1 new py-app -Lang python         # Auto port" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Multi-service projects" -ForegroundColor Yellow
+      Write-Host "    .\run.ps1 new my-stack -Lang web-stack" -ForegroundColor White
+      Write-Host "    .\run.ps1 new my-service -Lang microservice" -ForegroundColor White
       Write-Host ""
       Write-Host "  What gets created:" -ForegroundColor Cyan
-      Write-Host "    - Project folder in ./projects/<name>/" -ForegroundColor White
-      Write-Host "    - Dockerfile with optimized build" -ForegroundColor White
-      Write-Host "    - compose.yml with port mapping" -ForegroundColor White
-      Write-Host "    - Sample application code" -ForegroundColor White
+      Write-Host "    Single-service:" -ForegroundColor White
+      Write-Host "      - Project folder in ./projects/<name>/" -ForegroundColor DarkGray
+      Write-Host "      - Dockerfile with optimized build" -ForegroundColor DarkGray
+      Write-Host "      - compose.yml with port mapping" -ForegroundColor DarkGray
+      Write-Host "      - Sample application code" -ForegroundColor DarkGray
+      Write-Host ""
+      Write-Host "    Multi-service:" -ForegroundColor White
+      Write-Host "      - Project folder with subdirectories for each service" -ForegroundColor DarkGray
+      Write-Host "      - Multiple Dockerfiles (one per service)" -ForegroundColor DarkGray
+      Write-Host "      - compose.yml with service dependencies and health checks" -ForegroundColor DarkGray
+      Write-Host "      - Sample code for all services" -ForegroundColor DarkGray
       Write-Host ""
     }
 
@@ -312,58 +357,80 @@ function Show-TopicHelp {
     }
 
     "services" {
-      Write-Host "Running Individual Services:" -ForegroundColor Green
+      Write-Host "Managing Multi-Service Projects:" -ForegroundColor Green
       Write-Host ""
       Write-Host "  Projects with Multiple Services:" -ForegroundColor Cyan
       Write-Host "    Some projects contain multiple Docker services (containers)." -ForegroundColor White
-      Write-Host "    For example, 'solo-node' has 6 services:" -ForegroundColor White
-      Write-Host "      - bitcoin-main, bitcoin-testnet (Bitcoin nodes)" -ForegroundColor DarkGray
-      Write-Host "      - ckpool-main, ckpool-test (Mining pools)" -ForegroundColor DarkGray
-      Write-Host "      - bfgproxy-main, bfgproxy-test (Mining proxies)" -ForegroundColor DarkGray
+      Write-Host "    Examples:" -ForegroundColor White
+      Write-Host "      - web-stack: web, api, db (3 services)" -ForegroundColor DarkGray
+      Write-Host "      - microservice: service, redis (2 services)" -ForegroundColor DarkGray
+      Write-Host "      - solo-node: 6 Bitcoin/mining services" -ForegroundColor DarkGray
       Write-Host ""
       Write-Host "  Default Behavior:" -ForegroundColor Cyan
-      Write-Host "    .\up.ps1 <project>      # Starts ALL services in the project" -ForegroundColor White
-      Write-Host "    .\down.ps1 <project>    # Stops ALL services in the project" -ForegroundColor White
+      Write-Host "    .\up.ps1 <project>      # Starts ALL services" -ForegroundColor White
+      Write-Host "    .\down.ps1 <project>    # Stops ALL services" -ForegroundColor White
       Write-Host ""
-      Write-Host "  Running Specific Services:" -ForegroundColor Cyan
-      Write-Host "    Use docker compose directly to control individual services:" -ForegroundColor White
+      Write-Host "  Method 1: Using Enhanced Scripts (Recommended):" -ForegroundColor Cyan
       Write-Host ""
-      Write-Host "    # Start only specific services" -ForegroundColor Yellow
-      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> up -d <service1> <service2>" -ForegroundColor White
+      Write-Host "    # Start specific services" -ForegroundColor Yellow
+      Write-Host "    .\up.ps1 <project> -Services <service1>,<service2>" -ForegroundColor White
+      Write-Host "    .\up.ps1 web-stack -Services db,api -Build" -ForegroundColor DarkGray
       Write-Host ""
       Write-Host "    # Stop specific services" -ForegroundColor Yellow
-      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> stop <service1> <service2>" -ForegroundColor White
+      Write-Host "    .\down.ps1 <project> -Services <service1>,<service2>" -ForegroundColor White
+      Write-Host "    .\down.ps1 web-stack -Services web" -ForegroundColor DarkGray
       Write-Host ""
-      Write-Host "    # Remove specific services" -ForegroundColor Yellow
-      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> rm -f <service1> <service2>" -ForegroundColor White
+      Write-Host "  Method 2: Using service.ps1 (New Service Manager):" -ForegroundColor Cyan
       Write-Host ""
-      Write-Host "    # View logs for specific service" -ForegroundColor Yellow
-      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> logs -f <service>" -ForegroundColor White
+      Write-Host "    # Start services" -ForegroundColor Yellow
+      Write-Host "    .\service.ps1 start <project> <service1>,<service2> [-Build]" -ForegroundColor White
+      Write-Host "    .\service.ps1 start web-stack api,web" -ForegroundColor DarkGray
       Write-Host ""
-      Write-Host "  Examples for solo-node:" -ForegroundColor Cyan
+      Write-Host "    # Stop services" -ForegroundColor Yellow
+      Write-Host "    .\service.ps1 stop <project> <service1>,<service2>" -ForegroundColor White
+      Write-Host "    .\service.ps1 stop web-stack web" -ForegroundColor DarkGray
       Write-Host ""
-      Write-Host "    # Start only mainnet Bitcoin node" -ForegroundColor Yellow
-      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node up -d bitcoin-main" -ForegroundColor White
+      Write-Host "    # Restart services" -ForegroundColor Yellow
+      Write-Host "    .\service.ps1 restart <project> <service>" -ForegroundColor White
+      Write-Host "    .\service.ps1 restart web-stack api" -ForegroundColor DarkGray
       Write-Host ""
-      Write-Host "    # Start mainnet stack (node + pool + proxy)" -ForegroundColor Yellow
-      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node up -d bitcoin-main ckpool-main bfgproxy-main" -ForegroundColor White
+      Write-Host "    # View logs (with -Follow for live output)" -ForegroundColor Yellow
+      Write-Host "    .\service.ps1 logs <project> <service> [-Follow]" -ForegroundColor White
+      Write-Host "    .\service.ps1 logs web-stack api -Follow" -ForegroundColor DarkGray
       Write-Host ""
-      Write-Host "    # Start testnet stack only" -ForegroundColor Yellow
-      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node up -d bitcoin-testnet ckpool-test bfgproxy-test" -ForegroundColor White
+      Write-Host "    # Check service status" -ForegroundColor Yellow
+      Write-Host "    .\service.ps1 ps <project> <service1>,<service2>" -ForegroundColor White
       Write-Host ""
-      Write-Host "    # View logs for Bitcoin mainnet" -ForegroundColor Yellow
-      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node logs -f bitcoin-main" -ForegroundColor White
+      Write-Host "  Method 3: Using Docker Compose Profiles:" -ForegroundColor Cyan
+      Write-Host "    (For projects with profiles defined in compose.yml)" -ForegroundColor DarkGray
       Write-Host ""
-      Write-Host "    # Stop only testnet services" -ForegroundColor Yellow
-      Write-Host "    docker compose -f projects/solo-node/compose.yml -p solo-node stop bitcoin-testnet ckpool-test bfgproxy-test" -ForegroundColor White
+      Write-Host "    .\up.ps1 <project> -Profiles <profile1>,<profile2>" -ForegroundColor White
+      Write-Host "    .\up.ps1 microservices -Profiles core,gateway" -ForegroundColor DarkGray
+      Write-Host ""
+      Write-Host "  Examples for web-stack:" -ForegroundColor Cyan
+      Write-Host ""
+      Write-Host "    # Start only database and API" -ForegroundColor Yellow
+      Write-Host "    .\up.ps1 web-stack -Services db,api -Build" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Start all services" -ForegroundColor Yellow
+      Write-Host "    .\up.ps1 web-stack -Build" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # View API logs" -ForegroundColor Yellow
+      Write-Host "    .\service.ps1 logs web-stack api -Follow" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Restart web service after code changes" -ForegroundColor Yellow
+      Write-Host "    .\service.ps1 restart web-stack web" -ForegroundColor White
+      Write-Host ""
+      Write-Host "    # Stop only web frontend" -ForegroundColor Yellow
+      Write-Host "    .\down.ps1 web-stack -Services web" -ForegroundColor White
       Write-Host ""
       Write-Host "  List Services in a Project:" -ForegroundColor Cyan
-      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> ps" -ForegroundColor White
-      Write-Host "    docker compose -f projects/<name>/compose.yml -p <name> config --services" -ForegroundColor White
+      Write-Host "    docker compose -f projects/<name>/compose.yml config --services" -ForegroundColor White
+      Write-Host "    .\service.ps1 ps <project> <service>" -ForegroundColor White
       Write-Host ""
       Write-Host "  Note on Dependencies:" -ForegroundColor Yellow
-      Write-Host "    Some services depend on others (e.g., ckpool-main depends on bitcoin-main)." -ForegroundColor White
-      Write-Host "    Docker Compose will automatically start required dependencies." -ForegroundColor White
+      Write-Host "    Docker Compose automatically starts required dependencies." -ForegroundColor White
+      Write-Host "    For example, starting 'web' will also start 'api' and 'db' if needed." -ForegroundColor White
       Write-Host ""
     }
   }

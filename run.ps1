@@ -14,7 +14,7 @@ param(
   [string]$ProjectName,
 
   [Parameter()]
-  [ValidateSet("go", "node", "python", "py")]
+  [ValidateSet("go", "node", "python", "py", "web-stack", "microservice")]
   [string]$Lang,
 
   [Parameter()]
@@ -230,6 +230,403 @@ if __name__ == "__main__":
                 }
             }
         }
+        "web-stack" {
+            return @{
+                Port = 3000
+                IsMultiService = $true
+                Files = @{
+                    "compose.yml" = @"
+name: {{PROJECT_NAME}}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: `${DB_PASSWORD:-devpass}
+      POSTGRES_USER: `${DB_USER:-devuser}
+      POSTGRES_DB: `${DB_NAME:-appdb}
+    volumes:
+      - db-data:`/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U `${DB_USER:-devuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - PORT=8000
+      - DB_HOST=db
+      - DB_USER=`${DB_USER:-devuser}
+      - DB_PASSWORD=`${DB_PASSWORD:-devpass}
+      - DB_NAME=`${DB_NAME:-appdb}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build: ./web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "`${HOST_PORT:-{{HOST_PORT}}}:3000"
+    environment:
+      - PORT=3000
+      - API_URL=http://api:8000
+    restart: unless-stopped
+
+volumes:
+  db-data:
+"@
+                    "web/Dockerfile" = @"
+FROM node:20-alpine
+
+WORKDIR /app
+COPY package.json /app/
+RUN npm install --omit=dev
+
+COPY server.js /app/server.js
+
+EXPOSE 3000
+ENV PORT=3000
+CMD ["npm", "start"]
+"@
+                    "web/package.json" = @"
+{
+  "name": "{{PROJECT_NAME}}-web",
+  "version": "1.0.0",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
+"@
+                    "web/server.js" = @"
+const express = require("express");
+const os = require("os");
+
+const app = express();
+const port = process.env.PORT || 3000;
+const apiUrl = process.env.API_URL || "http://api:8000";
+
+app.get("/", async (req, res) => {
+  try {
+    const response = await fetch(apiUrl + "/");
+    const apiData = await response.json();
+
+    res.json({
+      project: "{{PROJECT_NAME}}",
+      service: "web",
+      hostname: os.hostname(),
+      api_response: apiData
+    });
+  } catch (error) {
+    res.json({
+      project: "{{PROJECT_NAME}}",
+      service: "web",
+      hostname: os.hostname(),
+      error: "Cannot connect to API"
+    });
+  }
+});
+
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Web service listening on :`+port);
+});
+"@
+                    "api/Dockerfile" = @"
+FROM python:3.12-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app.py /app/app.py
+
+EXPOSE 8000
+CMD ["python", "/app/app.py"]
+"@
+                    "api/requirements.txt" = "flask==3.0.3`npsycopg2-binary==2.9.9`n"
+                    "api/app.py" = @"
+from flask import Flask, jsonify
+import os
+import socket
+import psycopg2
+from datetime import datetime, timezone
+
+app = Flask(__name__)
+
+def get_db_connection():
+    return psycopg2.connect(
+        host=os.environ.get("DB_HOST", "db"),
+        database=os.environ.get("DB_NAME", "appdb"),
+        user=os.environ.get("DB_USER", "devuser"),
+        password=os.environ.get("DB_PASSWORD", "devpass")
+    )
+
+@app.get("/")
+def root():
+    try:
+        conn = get_db_connection()
+        conn.close()
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+
+    return jsonify({
+        "project": "{{PROJECT_NAME}}",
+        "service": "api",
+        "hostname": socket.gethostname(),
+        "time_utc": datetime.now(timezone.utc).isoformat(),
+        "database": db_status
+    })
+
+@app.get("/health")
+def health():
+    return jsonify({"status": "healthy"})
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "8000"))
+    app.run(host="0.0.0.0", port=port)
+"@
+                    ".env" = "DB_USER=devuser`nDB_PASSWORD=devpass`nDB_NAME=appdb`n"
+                    "README.md" = @"
+# {{PROJECT_NAME}}
+
+Multi-service web stack with:
+- **web**: Node.js frontend (port {{HOST_PORT}})
+- **api**: Python Flask backend (internal)
+- **db**: PostgreSQL database (internal)
+
+## Usage
+
+Start all services:
+``````powershell
+.\up.ps1 {{PROJECT_NAME}} -Build
+``````
+
+Start specific services:
+``````powershell
+.\up.ps1 {{PROJECT_NAME}} -Services web,api
+``````
+
+View logs:
+``````powershell
+.\service.ps1 logs {{PROJECT_NAME}} api -Follow
+``````
+
+Test:
+``````powershell
+curl http://localhost:{{HOST_PORT}}
+``````
+"@
+                }
+            }
+        }
+        "microservice" {
+            return @{
+                Port = 8080
+                IsMultiService = $true
+                Files = @{
+                    "compose.yml" = @"
+name: {{PROJECT_NAME}}
+
+x-service-common: &service-common
+  restart: unless-stopped
+  networks:
+    - app-network
+
+x-healthcheck-http: &healthcheck-http
+  interval: 10s
+  timeout: 5s
+  retries: 3
+  start_period: 10s
+
+services:
+  redis:
+    <<: *service-common
+    image: redis:7-alpine
+    volumes:
+      - redis-data:`/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      <<: *healthcheck-http
+
+  service:
+    <<: *service-common
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "`${HOST_PORT:-{{HOST_PORT}}}:8080"
+    environment:
+      - PORT=8080
+      - REDIS_HOST=redis
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      <<: *healthcheck-http
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+"@
+                    "Dockerfile" = @"
+FROM golang:1.22-alpine AS builder
+WORKDIR /src
+
+RUN apk add --no-cache curl
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/server .
+
+FROM alpine:3.20
+WORKDIR /app
+
+RUN apk add --no-cache curl
+
+COPY --from=builder /out/server /app/server
+
+EXPOSE 8080
+ENV PORT=8080
+CMD ["/app/server"]
+"@
+                    "go.mod" = "module {{PROJECT_NAME}}`n`ngo 1.22`n`nrequire github.com/redis/go-redis/v9 v9.5.1`n"
+                    "go.sum" = @"
+github.com/cespare/xxhash/v2 v2.2.0 h1:DC2CZ1Ep5Y4k3ZQ899DldepgrayRUGE6BBZ/cd9Cj44=
+github.com/cespare/xxhash/v2 v2.2.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BqPcfZpf7njtdGSn5Q=
+github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
+github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
+github.com/redis/go-redis/v9 v9.5.1 h1:H1X4D3yHPaYrkL5X06Wh6xNVM/pX0Ft4RV0vMGvLBh8=
+github.com/redis/go-redis/v9 v9.5.1/go.mod h1:hdY0cQFCN4fnSYT6TkisLufl/4W5UIXyv0b/CLO2V2E=
+"@
+                    "main.go" = @"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+)
+
+var rdb *redis.Client
+
+type Response struct {
+	Project     string ``json:"project"``
+	Service     string ``json:"service"``
+	TimeUTC     string ``json:"time_utc"``
+	RedisStatus string ``json:"redis_status"``
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Test Redis connection
+	redisStatus := "connected"
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		redisStatus = "error: " + err.Error()
+	}
+
+	resp := Response{
+		Project:     "{{PROJECT_NAME}}",
+		Service:     "microservice",
+		TimeUTC:     time.Now().UTC().Format(time.RFC3339),
+		RedisStatus: redisStatus,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+}
+
+func main() {
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		redisHost = "localhost"
+	}
+
+	rdb = redis.NewClient(&redis.Options{
+		Addr: redisHost + ":6379",
+	})
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handler)
+	mux.HandleFunc("/health", healthHandler)
+
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	log.Printf("{{PROJECT_NAME}} microservice listening on %s", srv.Addr)
+	log.Fatal(srv.ListenAndServe())
+}
+"@
+                    "README.md" = @"
+# {{PROJECT_NAME}}
+
+Microservice template with:
+- **service**: Go HTTP server (port {{HOST_PORT}})
+- **redis**: Redis cache (internal)
+
+## Usage
+
+Start all services:
+``````powershell
+.\up.ps1 {{PROJECT_NAME}} -Build
+``````
+
+View logs:
+``````powershell
+.\service.ps1 logs {{PROJECT_NAME}} service -Follow
+``````
+
+Test:
+``````powershell
+curl http://localhost:{{HOST_PORT}}
+``````
+"@
+                }
+            }
+        }
     }
 }
 
@@ -259,8 +656,8 @@ function New-Project {
     # Get language-specific settings
     $langConfig = Get-LanguageDefaults -Language $Language
     if (-not $langConfig) {
-        Write-Host "Error: Unsupported language '$Language'." -ForegroundColor Red
-        Write-Host "Supported languages: go, node, python" -ForegroundColor Yellow
+        Write-Host "Error: Unsupported template '$Language'." -ForegroundColor Red
+        Write-Host "Supported templates: go, node, python, web-stack, microservice" -ForegroundColor Yellow
         exit 1
     }
 
@@ -270,14 +667,21 @@ function New-Project {
     }
 
     # Create project directory
-    Write-Host "Creating project: $Name ($Language)" -ForegroundColor Cyan
+    $isMultiService = $langConfig.ContainsKey("IsMultiService") -and $langConfig.IsMultiService
+
+    if ($isMultiService) {
+        Write-Host "Creating multi-service project: $Name ($Language)" -ForegroundColor Cyan
+    } else {
+        Write-Host "Creating project: $Name ($Language)" -ForegroundColor Cyan
+    }
     Write-Host "  Location: $projectPath"
     Write-Host "  Host port: $HostPort -> Container port: $($langConfig.Port)"
 
     New-Item -ItemType Directory -Path $projectPath -Force | Out-Null
 
-    # Create compose.yml
-    $composeContent = @"
+    # For single-service projects, create compose.yml
+    if (-not $isMultiService) {
+        $composeContent = @"
 name: $Name
 services:
   web:
@@ -288,12 +692,21 @@ services:
       - PORT=$($langConfig.Port)
     restart: unless-stopped
 "@
-    Set-Content -Path (Join-Path $projectPath "compose.yml") -Value $composeContent
+        Set-Content -Path (Join-Path $projectPath "compose.yml") -Value $composeContent
+    }
 
     # Create language-specific files
     foreach ($file in $langConfig.Files.GetEnumerator()) {
-        $content = $file.Value -replace '{{PROJECT_NAME}}', $Name
-        Set-Content -Path (Join-Path $projectPath $file.Key) -Value $content
+        $filePath = Join-Path $projectPath $file.Key
+
+        # Create parent directory if file is in subdirectory
+        $parentDir = Split-Path -Parent $filePath
+        if ($parentDir -and !(Test-Path $parentDir)) {
+            New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+        }
+
+        $content = $file.Value -replace '{{PROJECT_NAME}}', $Name -replace '{{HOST_PORT}}', $HostPort
+        Set-Content -Path $filePath -Value $content
     }
 
     Write-Host ""
