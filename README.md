@@ -5,6 +5,39 @@
 
 ---
 
+## 🔄 Repository Setup (สำหรับการนำไปใช้งาน)
+
+**ถ้าคุณต้องการนำโปรเจคนี้ไปใช้กับ repository ของตัวเอง:**
+
+```powershell
+# 1. Clone โปรเจคนี้
+git clone https://github.com/geekp2p/multi-compose-labV2.git my-project
+cd my-project
+
+# 2. สร้าง repository ใหม่บน GitHub
+# https://github.com/new
+
+# 3. เปลี่ยน remote ไปยัง repository ของคุณ
+.\setup-repo.ps1 -NewRepoUrl "https://github.com/your-username/your-repo-name"
+
+# 4. Push ไปยัง repository ใหม่
+git push -u origin main
+```
+
+**หรือถ้าต้องการเปลี่ยน repository ปลายทาง:**
+
+```powershell
+# เช่น เปลี่ยนจาก multi-compose-labV2 ไปเป็น compose-workbench-core
+.\setup-repo.ps1 -NewRepoUrl "https://github.com/geekp2p/compose-workbench-core"
+```
+
+> 📖 **ดูคู่มือฉบับสมบูรณ์ที่:** [REPO-SETUP.md](REPO-SETUP.md)
+> - การตั้งค่า authentication (HTTPS/SSH)
+> - การจัดการ Git credentials
+> - Workflows และ best practices
+
+---
+
 ## ⚡ Quick Start (เริ่มต้นใช้งานภายใน 5 ขั้นตอน)
 
 ```powershell
@@ -257,6 +290,17 @@ docker volume ls
 ---
 
 ## 📚 สรุปคำสั่งทั้งหมด
+
+### Repository Management
+| คำสั่ง | คำอธิบาย |
+|--------|----------|
+| `.\setup-repo.ps1 -ShowCurrent` | ดูการตั้งค่า repository ปัจจุบัน |
+| `.\setup-repo.ps1 -NewRepoUrl <url>` | เปลี่ยน repository ปลายทาง |
+| `.\setup-repo.ps1 -TestConnection` | ทดสอบการเชื่อมต่อ repository |
+| `.\git-helper.ps1 -Status` | ดูสถานะ Git |
+| `.\git-helper.ps1 -Sync -Message "msg"` | Pull + Commit + Push |
+| `.\git-helper.ps1 -Pull` | Pull จาก remote |
+| `.\git-helper.ps1 -Push` | Push ไปยัง remote |
 
 ### Project Management
 | คำสั่ง | คำอธิบาย |
@@ -545,10 +589,15 @@ Optimize-VHD -Path "C:\Users\<User>\AppData\Local\Docker\wsl\data\ext4.vhdx" -Mo
 ---
 
 ## 📖 ดูเพิ่มเติม
+- **[REPO-SETUP.md](REPO-SETUP.md)** - คู่มือการตั้งค่า Git repository และ authentication
 - **[TEMPLATES.md](TEMPLATES.md)** - รายละเอียด 5 templates พร้อมวิธีสร้าง custom template
 - **[RECOMMENDATIONS.md](RECOMMENDATIONS.md)** - คำแนะนำ best practices
 - **[CLAUDE.md](CLAUDE.md)** - กฎการ refactor และ development guidelines
 - **[help.ps1](help.ps1)** - คู่มือแบบ interactive (รัน `.\help.ps1`)
+
+### สคริปต์เสริม
+- **[setup-repo.ps1](setup-repo.ps1)** - ตั้งค่าและเปลี่ยน Git repository
+- **[git-helper.ps1](git-helper.ps1)** - Git operations แบบง่ายๆ
 
 ---
 
