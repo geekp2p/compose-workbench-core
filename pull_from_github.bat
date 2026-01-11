@@ -21,7 +21,33 @@ if %ERRORLEVEL% NEQ 0 (
   if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 )
 
+rem Save current commit hash for comparison
+for /f %%h in ('git rev-parse HEAD 2^>nul') do set OLD_COMMIT=%%h
+
 git fetch %REMOTE% || goto error
+
+rem Get the new commit hash from remote
+for /f %%h in ('git rev-parse %REMOTE%/%BRANCH% 2^>nul') do set NEW_COMMIT=%%h
+
+rem Show what's changing if there are updates
+if not "%OLD_COMMIT%"=="%NEW_COMMIT%" (
+  echo.
+  echo === UPDATE SUMMARY ===
+  echo From: %OLD_COMMIT:~0,7%
+  echo To:   %NEW_COMMIT:~0,7%
+  echo.
+  echo New commits:
+  git log --oneline %OLD_COMMIT%..%NEW_COMMIT%
+  echo.
+  echo Files changed:
+  git diff --stat %OLD_COMMIT%..%NEW_COMMIT%
+  echo.
+  echo ======================
+  echo.
+) else (
+  echo Already up to date - no changes detected.
+)
+
 git reset --hard %REMOTE%/%BRANCH% || goto error
 git clean -fd || goto error
 
