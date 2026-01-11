@@ -1,54 +1,54 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    จัดการหลาย repos พร้อมกัน (compose-workbench-core-1, -2, -3, etc.)
+    Manage multiple repos at once (compose-workbench-core-1, -2, -3, etc.)
 
 .DESCRIPTION
-    Script นี้ช่วยให้คุณจัดการหลาย repos พร้อมกันได้ง่ายๆ
-    - Auto detect repos ทั้งหมด
-    - Run commands ทุก repos พร้อมกัน
+    This script helps you manage multiple repos easily
+    - Auto detect all repos
+    - Run commands across all repos
     - Git operations (pull, push, status)
 
 .PARAMETER List
-    แสดงรายการ repos ทั้งหมด
+    List all repos
 
 .PARAMETER Command
-    รันคำสั่งใน repos ทั้งหมด
+    Run command in all repos
 
 .PARAMETER Path
-    Path ที่เก็บ repos (default: parent directory)
+    Path where repos are stored (default: parent directory)
 
 .PARAMETER Pattern
-    Pattern สำหรับหา repos (default: compose-workbench-core*)
+    Pattern to find repos (default: compose-workbench-core*)
 
 .PARAMETER GitPull
-    Git pull ทุก repos
+    Git pull all repos
 
 .PARAMETER GitStatus
-    Git status ทุก repos
+    Git status all repos
 
 .PARAMETER GitPush
-    Git push ทุก repos
+    Git push all repos
 
 .EXAMPLE
     .\repos-manager.ps1 -List
-    แสดง repos ทั้งหมด
+    List all repos
 
 .EXAMPLE
     .\repos-manager.ps1 -GitStatus
-    Git status ทุก repos
+    Git status all repos
 
 .EXAMPLE
     .\repos-manager.ps1 -GitPull
-    Git pull ทุก repos
+    Git pull all repos
 
 .EXAMPLE
     .\repos-manager.ps1 -Command "git status"
-    รันคำสั่ง git status ใน repos ทั้งหมด
+    Run git status in all repos
 
 .EXAMPLE
     .\repos-manager.ps1 -Command "docker compose ps" -Pattern "compose-*"
-    รันคำสั่งใน repos ที่ match pattern
+    Run command in repos that match pattern
 #>
 
 param(
@@ -87,12 +87,12 @@ function Write-Header($msg) {
 
 function Write-RepoHeader($repo) {
     Write-Host ""
-    Write-Host "📁 $repo" -ForegroundColor Yellow
+    Write-Host "[REPO] $repo" -ForegroundColor Yellow
     Write-Host ("-" * 50) -ForegroundColor Gray
 }
 
-function Write-Success($msg) { Write-Host "✅ $msg" -ForegroundColor Green }
-function Write-Err($msg) { Write-Host "❌ $msg" -ForegroundColor Red }
+function Write-Success($msg) { Write-Host "[OK] $msg" -ForegroundColor Green }
+function Write-Err($msg) { Write-Host "[ERROR] $msg" -ForegroundColor Red }
 function Write-Info($msg) { Write-Host $msg -ForegroundColor Cyan }
 
 # Get base path
@@ -109,7 +109,7 @@ if (-not (Test-Path $basePath)) {
 }
 
 # Find all repos
-Write-Info "🔍 Searching for repos in: $basePath"
+Write-Info "Searching for repos in: $basePath"
 Write-Info "   Pattern: $Pattern"
 Write-Host ""
 
@@ -129,7 +129,7 @@ Write-Success "Found $($repos.Count) repo(s)"
 
 # List repos
 if ($List -or (-not $Command -and -not $GitPull -and -not $GitStatus -and -not $GitPush)) {
-    Write-Header "📋 Repositories"
+    Write-Header "Repositories"
 
     foreach ($repo in $repos) {
         $repoPath = $repo.FullName
@@ -139,7 +139,7 @@ if ($List -or (-not $Command -and -not $GitPull -and -not $GitStatus -and -not $
             $branch = git rev-parse --abbrev-ref HEAD 2>$null
             $status = git status --short 2>$null
 
-            Write-Host "📁 " -NoNewline -ForegroundColor Yellow
+            Write-Host "[REPO] " -NoNewline -ForegroundColor Yellow
             Write-Host $repo.Name -NoNewline -ForegroundColor White
             Write-Host " [$branch]" -ForegroundColor Cyan
 
@@ -153,7 +153,7 @@ if ($List -or (-not $Command -and -not $GitPull -and -not $GitStatus -and -not $
 
             Write-Host "   Path: $repoPath" -ForegroundColor DarkGray
         } catch {
-            Write-Host "📁 " -NoNewline -ForegroundColor Yellow
+            Write-Host "[REPO] " -NoNewline -ForegroundColor Yellow
             Write-Host $repo.Name -ForegroundColor White
             Write-Host "   +- " -NoNewline -ForegroundColor Gray
             Write-Host "Error reading git info" -ForegroundColor Red
@@ -170,7 +170,7 @@ if ($List -or (-not $Command -and -not $GitPull -and -not $GitStatus -and -not $
 
 # Git Status
 if ($GitStatus) {
-    Write-Header "📊 Git Status - All Repos"
+    Write-Header "Git Status - All Repos"
 
     foreach ($repo in $repos) {
         Write-RepoHeader $repo.Name
@@ -191,7 +191,7 @@ if ($GitStatus) {
 
 # Git Pull
 if ($GitPull) {
-    Write-Header "⬇️  Git Pull - All Repos"
+    Write-Header "Git Pull - All Repos"
 
     $successCount = 0
     $failCount = 0
@@ -230,9 +230,9 @@ if ($GitPull) {
 
 # Git Push
 if ($GitPush) {
-    Write-Header "⬆️  Git Push - All Repos"
+    Write-Header "Git Push - All Repos"
 
-    Write-Host "⚠️  " -NoNewline -ForegroundColor Yellow
+    Write-Host "[WARNING] " -NoNewline -ForegroundColor Yellow
     Write-Host "This will push ALL repos!" -ForegroundColor Yellow
     Write-Host ""
 
@@ -312,7 +312,7 @@ if ($GitPush) {
 
 # Custom Command
 if ($Command) {
-    Write-Header "🚀 Running Command - All Repos"
+    Write-Header "Running Command - All Repos"
 
     Write-Info "Command: $Command"
     Write-Host ""
@@ -335,7 +335,7 @@ if ($Command) {
 }
 
 # Show help if no parameters
-Write-Header "📚 Repos Manager Help"
+Write-Header "Repos Manager Help"
 
 Write-Info "Usage:"
 Write-Host "  .\repos-manager.ps1 -List" -ForegroundColor Yellow
