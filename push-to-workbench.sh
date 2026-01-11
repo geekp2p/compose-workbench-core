@@ -1,11 +1,18 @@
 #!/bin/bash
-# Script to push multi-compose-labV2 to compose-workbench-core
+# Script to push to any GitHub repo
 # สำหรับ Linux/macOS/WSL
+# Usage: ./push-to-workbench.sh [repo-name] [owner]
+#   repo-name: Target repository name (default: compose-workbench-core)
+#   owner: GitHub owner/org (default: geekp2p)
 
 set -e
 
+# Parse arguments
+REPO_NAME="${1:-compose-workbench-core}"
+REPO_OWNER="${2:-geekp2p}"
+
 echo "==================================="
-echo "Push to compose-workbench-core"
+echo "Push to $REPO_OWNER/$REPO_NAME"
 echo "==================================="
 echo ""
 
@@ -30,14 +37,17 @@ echo "Step 1: Check Git credentials"
 echo "==================================="
 
 # Check if we can access GitHub
-if git ls-remote https://github.com/geekp2p/compose-workbench-core.git HEAD &>/dev/null; then
-    echo "✅ Can access compose-workbench-core (public)"
+if git ls-remote https://github.com/$REPO_OWNER/$REPO_NAME.git HEAD &>/dev/null; then
+    echo "✅ Can access $REPO_OWNER/$REPO_NAME"
 else
-    echo "❌ Cannot access compose-workbench-core"
+    echo "❌ Cannot access $REPO_OWNER/$REPO_NAME"
     echo ""
-    echo "Please ensure you have:"
-    echo "1. Git installed"
-    echo "2. Network connection to GitHub"
+    echo "Please ensure:"
+    echo "1. Repo exists: https://github.com/$REPO_OWNER/$REPO_NAME"
+    echo "2. You have access to the repo"
+    echo "3. Network connection to GitHub"
+    echo ""
+    echo "Create repo at: https://github.com/new"
     exit 1
 fi
 
@@ -62,11 +72,11 @@ case $AUTH_CHOICE in
         read -p "Enter your GitHub Personal Access Token: " -s TOKEN
         echo ""
 
-        REMOTE_URL="https://${TOKEN}@github.com/geekp2p/compose-workbench-core.git"
+        REMOTE_URL="https://${TOKEN}@github.com/$REPO_OWNER/$REPO_NAME.git"
         ;;
     2)
         echo ""
-        REMOTE_URL="git@github.com:geekp2p/compose-workbench-core.git"
+        REMOTE_URL="git@github.com:$REPO_OWNER/$REPO_NAME.git"
 
         # Test SSH connection
         if ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
@@ -82,7 +92,7 @@ case $AUTH_CHOICE in
     3)
         echo ""
         echo "Using proxy (may fail with 502 error)..."
-        REMOTE_URL="http://local_proxy@127.0.0.1:58681/git/geekp2p/compose-workbench-core"
+        REMOTE_URL="http://local_proxy@127.0.0.1:58681/git/$REPO_OWNER/$REPO_NAME"
         ;;
     *)
         echo "Invalid choice"
@@ -104,11 +114,11 @@ git remote -v | grep workbench
 
 echo ""
 echo "==================================="
-echo "Step 4: Push to compose-workbench-core"
+echo "Step 4: Push to $REPO_OWNER/$REPO_NAME"
 echo "==================================="
 echo ""
 echo "Pushing branch: $CURRENT_BRANCH"
-echo "To: compose-workbench-core"
+echo "To: $REPO_OWNER/$REPO_NAME"
 echo ""
 
 # Push with retry logic (as per instructions)
@@ -129,7 +139,7 @@ for i in $(seq 0 $MAX_RETRIES); do
         echo "==================================="
         echo ""
         echo "Branch pushed to:"
-        echo "  https://github.com/geekp2p/compose-workbench-core/tree/$CURRENT_BRANCH"
+        echo "  https://github.com/$REPO_OWNER/$REPO_NAME/tree/$CURRENT_BRANCH"
         echo ""
         echo "Next steps:"
         echo "  1. Create PR on GitHub"
@@ -151,8 +161,9 @@ echo "==================================="
 echo ""
 echo "Please check:"
 echo "  1. GitHub credentials are valid"
-echo "  2. You have push access to compose-workbench-core"
+echo "  2. You have push access to $REPO_OWNER/$REPO_NAME"
 echo "  3. Network connection is stable"
+echo "  4. Repo exists: https://github.com/$REPO_OWNER/$REPO_NAME"
 echo ""
 echo "See MIGRATION-GUIDE.md for more help"
 exit 1
