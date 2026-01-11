@@ -49,6 +49,7 @@ show_main_commands() {
   echo -e "\033[1;36m  Docker Operations:\033[0m"
   echo "    ./up.ps1 <project> [-Build]"
   echo "      Start a project (use -Build for first time or after code changes)"
+  echo -e "\033[0;90m      Note: Starts ALL services in the project. See ./help.ps1 services\033[0m"
   echo ""
   echo "    ./down.ps1 <project>"
   echo "      Stop a running project"
@@ -73,7 +74,7 @@ show_main_commands() {
   echo "      Show this help message"
   echo ""
   echo "    ./help.ps1 <topic>"
-  echo "      Show detailed help for: start, stop, clean, new, list, remove"
+  echo "      Show detailed help for: start, stop, clean, new, list, remove, services"
   echo ""
 }
 
@@ -132,8 +133,8 @@ show_available_projects() {
 
   echo -e "\033[1;32mAvailable Projects:\033[0m"
   echo ""
-  printf "  %-20s %-10s %s\n" "Name" "Language" "Port"
-  printf "  %-20s %-10s %s\n" "----" "--------" "----"
+  printf "  %-20s %-10s %-10s %s\n" "Name" "Language" "Port" "Services"
+  printf "  %-20s %-10s %-10s %s\n" "----" "--------" "----" "--------"
 
   for project_dir in projects/*/; do
     if [ -d "$project_dir" ]; then
@@ -144,13 +145,17 @@ show_available_projects() {
         # Extract port
         local port=$(grep -oP '\$\{HOST_PORT:-\K\d+' "$compose_file" 2>/dev/null || echo "?")
 
+        # Count services (extract only services section, then count service names excluding x- anchors)
+        local service_count=$(sed -n '/^services:/,/^[a-z]/p' "$compose_file" 2>/dev/null | grep -P '^  [a-zA-Z0-9_-]+:\s*$' | grep -v '^  x-' | wc -l)
+        [ "$service_count" -eq 0 ] && service_count=1
+
         # Detect language
         local lang="?"
         [ -f "${project_dir}go.mod" ] && lang="go"
         [ -f "${project_dir}package.json" ] && lang="node"
         [ -f "${project_dir}requirements.txt" ] && lang="python"
 
-        printf "  %-20s %-10s %s\n" "$name" "$lang" "$port"
+        printf "  %-20s %-10s %-10s %s\n" "$name" "$lang" "$port" "$service_count"
       fi
     fi
   done
@@ -188,7 +193,7 @@ show_footer() {
   echo "═══════════════════════════════════════════════════════════"
   echo ""
   echo "  For more help on a specific topic:"
-  echo "    ./help.ps1 <topic>  (start|stop|clean|new|list|remove)"
+  echo "    ./help.ps1 <topic>  (start|stop|clean|new|list|remove|services)"
   echo ""
   echo "  Project repository: multi-compose-lab"
   echo ""
