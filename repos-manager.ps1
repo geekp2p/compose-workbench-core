@@ -88,7 +88,7 @@ function Write-Header($msg) {
 function Write-RepoHeader($repo) {
     Write-Host ""
     Write-Host "📁 $repo" -ForegroundColor Yellow
-    Write-Host ("─" * 50) -ForegroundColor Gray
+    Write-Host ("-" * 50) -ForegroundColor Gray
 }
 
 function Write-Success($msg) { Write-Host "✅ $msg" -ForegroundColor Green }
