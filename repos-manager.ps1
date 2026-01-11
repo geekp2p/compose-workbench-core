@@ -144,10 +144,10 @@ if ($List -or (-not $Command -and -not $GitPull -and -not $GitStatus -and -not $
             Write-Host " [$branch]" -ForegroundColor Cyan
 
             if ($status) {
-                Write-Host "   └─ " -NoNewline -ForegroundColor Gray
+                Write-Host "   +- " -NoNewline -ForegroundColor Gray
                 Write-Host "$($status.Count) changes" -ForegroundColor Yellow
             } else {
-                Write-Host "   └─ " -NoNewline -ForegroundColor Gray
+                Write-Host "   +- " -NoNewline -ForegroundColor Gray
                 Write-Host "clean" -ForegroundColor Green
             }
 
@@ -155,7 +155,7 @@ if ($List -or (-not $Command -and -not $GitPull -and -not $GitStatus -and -not $
         } catch {
             Write-Host "📁 " -NoNewline -ForegroundColor Yellow
             Write-Host $repo.Name -ForegroundColor White
-            Write-Host "   └─ " -NoNewline -ForegroundColor Gray
+            Write-Host "   +- " -NoNewline -ForegroundColor Gray
             Write-Host "Error reading git info" -ForegroundColor Red
         } finally {
             Pop-Location
