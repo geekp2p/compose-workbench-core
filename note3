@@ -1,0 +1,15 @@
+PS C:\multiprojlab\multi-compose-labV2> git push origin main --force
+Enumerating objects: 181, done.
+Counting objects: 100% (181/181), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (166/166), done.
+Writing objects: 100% (179/179), 394.80 KiB | 7.59 MiB/s, done.
+Total 179 (delta 8), reused 30 (delta 3), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (8/8), done.
+To https://github.com/geekp2p/compose-workbench-core.git
+ + 7e4a9cb...a2124dc main -> main (forced update)
+PS C:\multiprojlab\multi-compose-labV2> git push origin main --force-with-lease
+Everything up-to-date
+PS C:\multiprojlab\multi-compose-labV2> git reset --hard origin/main
+HEAD is now at a2124dc 🐛 fix:
+PS C:\multiprojlab\multi-compose-labV2>
