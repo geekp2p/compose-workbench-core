@@ -26,24 +26,47 @@ echo.
 set "MAXSIZE=2000000"
 
 rem ---- allowed text extensions ----
-set "ALLOWEXTS=.ps1 .txt .md .json .yaml .yml .xml .html .htm .css .js .ts .go .py .bat .cmd .ps1 .ini .conf .toml .env .gitignore .dockerfile"
+set "ALLOWEXTS=.ps1 .psm1 .txt .md .json .yaml .yml .xml .html .htm .css .js .ts .go .py .bat .cmd .ini .conf .toml .env .gitignore .dockerfile .sh .c .h .am .in .ac .rst .cmake .asm .def .pc"
 
 rem ---- blacklist extensions (won't show even if in allow list) ----
-set "SKIPEXTS=.mod .sum .lock .bat"
+set "SKIPEXTS=.mod .sum .lock"
 
-for /r "%target%" %%F in (*.*) do (
+rem ---- files without extension to include (filename patterns) ----
+set "NOEXT_FILES=Dockerfile LICENSE Makefile README AUTHORS COPYING NEWS ChangeLog"
+
+rem ---- directories to skip ----
+set "SKIP_DIRS=.git node_modules __pycache__ .pytest_cache build dist obj bin"
+
+rem ---- Process all files ----
+for /r "%target%" %%F in (*) do (
     set "full=%%~fF"
     set "ext=%%~xF"
     set "size=%%~zF"
+    set "name=%%~nxF"
+    set "skip_dir=0"
+
+    rem check if file is in a blacklisted directory
+    for %%D in (%SKIP_DIRS%) do (
+        echo !full! | findstr /I /C:"\%%D\" >nul
+        if !ERRORLEVEL! EQU 0 set "skip_dir=1"
+    )
 
     rem skip output file if provided as arg2
     if /I "!full!"=="%skipfile%" (
         rem skip
+    ) else if "!skip_dir!"=="1" (
+        rem skip - in blacklisted directory
     ) else (
         set "okext=0"
-        call :isTextExt "!ext!" "%ALLOWEXTS%" okext
         set "skipext=0"
-        call :isTextExt "!ext!" "%SKIPEXTS%" skipext
+
+        rem check if it's a file without extension that we want to include
+        if "!ext!"=="" (
+            call :isTextExt "!name!" "%NOEXT_FILES%" okext
+        ) else (
+            call :isTextExt "!ext!" "%ALLOWEXTS%" okext
+            call :isTextExt "!ext!" "%SKIPEXTS%" skipext
+        )
 
         if "!okext!"=="1" if "!skipext!"=="0" (
             echo ----------------------------------------
