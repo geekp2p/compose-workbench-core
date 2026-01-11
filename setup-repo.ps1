@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Setup or change Git repository configuration
 
@@ -131,7 +131,7 @@ function Test-GitConnection {
     $result = git ls-remote --heads $Remote 2>&1
 
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "✓ Connection successful!" -ForegroundColor Green
+        Write-Host "[OK] Connection successful!" -ForegroundColor Green
         Write-Host ""
         Write-Host "Available branches:" -ForegroundColor Yellow
         $result | ForEach-Object {
@@ -141,7 +141,7 @@ function Test-GitConnection {
         }
         return $true
     } else {
-        Write-Host "✗ Connection failed!" -ForegroundColor Red
+        Write-Host "[X] Connection failed!" -ForegroundColor Red
         Write-Host ""
         Write-Host "Error details:" -ForegroundColor Red
         Write-Host $result -ForegroundColor Red
@@ -165,18 +165,18 @@ function Set-GitUser {
         if (-not $userName) {
             $name = Read-Host "Enter your name"
             git config user.name $name
-            Write-Host "✓ Name set to: $name" -ForegroundColor Green
+            Write-Host "[OK] Name set to: $name" -ForegroundColor Green
         }
 
         if (-not $userEmail) {
             $email = Read-Host "Enter your email"
             git config user.email $email
-            Write-Host "✓ Email set to: $email" -ForegroundColor Green
+            Write-Host "[OK] Email set to: $email" -ForegroundColor Green
         }
 
         Write-Host ""
     } else {
-        Write-Host "✓ Git user already configured:" -ForegroundColor Green
+        Write-Host "[OK] Git user already configured:" -ForegroundColor Green
         Write-Host "  Name: $userName" -ForegroundColor White
         Write-Host "  Email: $userEmail" -ForegroundColor White
         Write-Host ""
@@ -200,7 +200,7 @@ function Set-GitRemote {
     $isSsh = $Url -match '^git@'
 
     if (-not $isHttps -and -not $isSsh) {
-        Write-Host "✗ Invalid URL format!" -ForegroundColor Red
+        Write-Host "[X] Invalid URL format!" -ForegroundColor Red
         Write-Host ""
         Write-Host "Valid formats:" -ForegroundColor Yellow
         Write-Host "  HTTPS: https://github.com/username/repo-name" -ForegroundColor White
@@ -229,9 +229,9 @@ function Set-GitRemote {
         if ($response -eq 'y' -or $response -eq 'Y') {
             git remote set-url $Remote $Url
             if ($LASTEXITCODE -eq 0) {
-                Write-Host "✓ Remote '$Remote' updated successfully!" -ForegroundColor Green
+                Write-Host "[OK] Remote '$Remote' updated successfully!" -ForegroundColor Green
             } else {
-                Write-Host "✗ Failed to update remote!" -ForegroundColor Red
+                Write-Host "[X] Failed to update remote!" -ForegroundColor Red
                 exit 1
             }
         } else {
@@ -241,9 +241,9 @@ function Set-GitRemote {
     } else {
         git remote add $Remote $Url
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "✓ Remote '$Remote' added successfully!" -ForegroundColor Green
+            Write-Host "[OK] Remote '$Remote' added successfully!" -ForegroundColor Green
         } else {
-            Write-Host "✗ Failed to add remote!" -ForegroundColor Red
+            Write-Host "[X] Failed to add remote!" -ForegroundColor Red
             exit 1
         }
     }
@@ -257,16 +257,16 @@ function Set-GitRemote {
         # Check if running on Windows
         if ($IsWindows -or $env:OS -match "Windows") {
             git config --global credential.helper wincred
-            Write-Host "✓ Credential helper set to 'wincred'" -ForegroundColor Green
+            Write-Host "[OK] Credential helper set to 'wincred'" -ForegroundColor Green
         } else {
             # Linux/Mac
             $credHelperExists = Get-Command git-credential-store -ErrorAction SilentlyContinue
             if ($credHelperExists) {
                 git config --global credential.helper store
-                Write-Host "✓ Credential helper set to 'store'" -ForegroundColor Green
+                Write-Host "[OK] Credential helper set to 'store'" -ForegroundColor Green
             } else {
                 git config --global credential.helper cache
-                Write-Host "✓ Credential helper set to 'cache'" -ForegroundColor Green
+                Write-Host "[OK] Credential helper set to 'cache'" -ForegroundColor Green
             }
         }
 
@@ -302,7 +302,7 @@ Show-Banner
 # Check if git is installed
 $gitExists = Get-Command git -ErrorAction SilentlyContinue
 if (-not $gitExists) {
-    Write-Host "✗ Git is not installed!" -ForegroundColor Red
+    Write-Host "[X] Git is not installed!" -ForegroundColor Red
     Write-Host "Please install Git first: https://git-scm.com/downloads" -ForegroundColor Yellow
     exit 1
 }
@@ -310,7 +310,7 @@ if (-not $gitExists) {
 # Check if we're in a git repository
 $isGitRepo = Test-Path .git
 if (-not $isGitRepo) {
-    Write-Host "✗ This is not a Git repository!" -ForegroundColor Red
+    Write-Host "[X] This is not a Git repository!" -ForegroundColor Red
     Write-Host "Run 'git init' first to initialize a Git repository." -ForegroundColor Yellow
     exit 1
 }
