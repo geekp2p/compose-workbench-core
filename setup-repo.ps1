@@ -277,7 +277,7 @@ function Set-GitRemote {
         Write-Host "    Password: Your GitHub Personal Access Token (PAT)" -ForegroundColor White
         Write-Host ""
         Write-Host "  To create a PAT:" -ForegroundColor Yellow
-        Write-Host "    1. Go to GitHub → Settings → Developer settings" -ForegroundColor White
+        Write-Host "    1. Go to GitHub -> Settings -> Developer settings" -ForegroundColor White
         Write-Host "    2. Generate new token (classic)" -ForegroundColor White
         Write-Host "    3. Select scopes: repo (full control)" -ForegroundColor White
         Write-Host "    4. Copy the token and use it as password" -ForegroundColor White
@@ -288,7 +288,7 @@ function Set-GitRemote {
         Write-Host "    1. Generate key: ssh-keygen -t ed25519 -C 'your_email@example.com'" -ForegroundColor White
         Write-Host "    2. Add to agent: ssh-add ~/.ssh/id_ed25519" -ForegroundColor White
         Write-Host "    3. Copy public key: cat ~/.ssh/id_ed25519.pub" -ForegroundColor White
-        Write-Host "    4. Add to GitHub → Settings → SSH and GPG keys" -ForegroundColor White
+        Write-Host "    4. Add to GitHub -> Settings -> SSH and GPG keys" -ForegroundColor White
         Write-Host ""
     }
 }
@@ -348,7 +348,7 @@ if ($NewRepoUrl) {
         Write-Host ""
         Write-Host "Next steps:" -ForegroundColor Cyan
         Write-Host "  1. Make some changes to your project" -ForegroundColor White
-        Write-Host "  2. Commit: git add . && git commit -m 'Your message'" -ForegroundColor White
+        Write-Host "  2. Commit: git add . ; git commit -m 'Your message'" -ForegroundColor White
         Write-Host "  3. Push: git push -u $RemoteName main" -ForegroundColor White
         Write-Host ""
         Write-Host "Or use the git-helper.ps1 script for easier git operations!" -ForegroundColor Yellow
