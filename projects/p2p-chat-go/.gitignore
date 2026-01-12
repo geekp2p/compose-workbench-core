@@ -1,5 +1,5 @@
-# Binaries
-p2p-chat
+# Binaries (only at root level, not directories)
+/p2p-chat
 *.exe
 *.exe~
 *.dll
