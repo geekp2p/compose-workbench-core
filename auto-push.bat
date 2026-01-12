@@ -29,7 +29,11 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo [1/4] Getting current branch...
+echo [1/4] Checking git configuration...
+call :ensure_git_email_configured
+
+echo.
+echo [2/4] Getting current branch...
 for /f "tokens=*" %%a in ('git branch --show-current') do set "current_branch=%%a"
 
 if not defined current_branch (
@@ -49,7 +53,7 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [2/4] Checking what will be pushed...
+echo [3/5] Checking what will be pushed...
 echo.
 
 rem Check for unpushed commits
@@ -67,7 +71,7 @@ if !commit_count! gtr 0 (
 )
 
 echo.
-echo [3/4] Current status...
+echo [4/5] Current status...
 echo.
 git status -s
 if %errorlevel% neq 0 (
@@ -75,7 +79,7 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [4/4] Pushing to origin/!current_branch!...
+echo [5/5] Pushing to origin/!current_branch!...
 echo.
 
 rem Retry logic: up to 4 retries with exponential backoff (2s, 4s, 8s, 16s)
@@ -127,6 +131,50 @@ echo - No changes to push
 echo - Authentication failed
 echo.
 exit /b 1
+
+:ensure_git_email_configured
+rem Check and fix git email configuration to avoid GitHub privacy restrictions
+rem GitHub blocks pushes with private emails like noreply@anthropic.com
+
+rem Get current configured email
+for /f "delims=" %%e in ('git config user.email 2^>nul') do set "GIT_EMAIL=%%e"
+
+rem Check if email contains problematic domains
+echo !GIT_EMAIL! | findstr /C:"anthropic.com" >nul
+if %errorlevel% equ 0 goto fix_email_auto
+
+rem Check if email is empty
+if "!GIT_EMAIL!"=="" goto fix_email_auto
+
+rem Email looks okay
+echo Git email: !GIT_EMAIL!
+exit /b 0
+
+:fix_email_auto
+rem Try to get GitHub username from remote
+for /f "tokens=2 delims=/" %%u in ('git remote get-url origin 2^>nul') do set "GITHUB_USER=%%u"
+if "!GITHUB_USER!"=="" set "GITHUB_USER=user"
+
+rem Remove .git suffix if present
+set "GITHUB_USER=!GITHUB_USER:.git=!"
+
+echo [AUTO-FIX] Current email: !GIT_EMAIL!
+echo [AUTO-FIX] Configuring GitHub no-reply email...
+
+rem Try to extract ID from existing commits
+for /f "tokens=1 delims=+" %%i in ('git log -1 --format^=%%ae 2^>nul ^| findstr "@users.noreply.github.com"') do set "GITHUB_ID=%%i"
+
+if defined GITHUB_ID (
+  rem Found ID in history, use it
+  git config user.email "!GITHUB_ID!+!GITHUB_USER!@users.noreply.github.com"
+  echo [AUTO-FIX] New email: !GITHUB_ID!+!GITHUB_USER!@users.noreply.github.com
+) else (
+  rem No ID found, use simple format
+  git config user.email "!GITHUB_USER!@users.noreply.github.com"
+  echo [AUTO-FIX] New email: !GITHUB_USER!@users.noreply.github.com
+)
+
+exit /b 0
 
 :success
 endlocal
