@@ -1,0 +1,32 @@
+# Binaries
+p2p-chat
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Environment files
+.env
+
+# Data directory
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
