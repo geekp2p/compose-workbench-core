@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
 rem Default remote URL for this repository (used when no remote is configured)
 set DEFAULT_REMOTE_URL=https://github.com/geekp2p/multi-compose-labV2.git
@@ -10,11 +10,35 @@ if "%REMOTE%"=="" set REMOTE=origin
 
 set BRANCH=%2
 if "%BRANCH%"=="" (
-  for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set BRANCH=%%b
+  rem Find the latest claude/ branch from remote
+  echo Fetching latest branches...
+  git fetch %REMOTE% --quiet 2>nul
+
+  rem Get the latest claude/ branch (first line only using for loop break)
+  set LATEST_BRANCH=
+  for /f "delims=" %%b in ('git for-each-ref --sort^=-committerdate --format^="%%(refname:short)" refs/remotes/%REMOTE%/claude/ 2^>nul') do (
+    if not defined LATEST_BRANCH set LATEST_BRANCH=%%b
+  )
+
+  rem Remove "origin/" prefix to get branch name
+  if defined LATEST_BRANCH (
+    set "BRANCH=!LATEST_BRANCH:%REMOTE%/=!"
+    echo Found latest claude branch: !BRANCH!
+  ) else (
+    rem Fallback to current branch
+    for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set BRANCH=%%b
+  )
 )
 if "%BRANCH%"=="" set BRANCH=main
 
-echo Syncing local branch with %REMOTE%/%BRANCH% ...
+echo Syncing local branch with %REMOTE%/!BRANCH! ...
+
+rem Switch to the branch if not already on it
+for /f "delims=" %%c in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set CURRENT_BRANCH=%%c
+if not "!CURRENT_BRANCH!"=="!BRANCH!" (
+  echo Switching to branch !BRANCH!...
+  git checkout -B !BRANCH! %REMOTE%/!BRANCH! 2>nul || git checkout -b !BRANCH! %REMOTE%/!BRANCH! 2>nul || goto error
+)
 git remote get-url %REMOTE% >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
   call :add_remote %REMOTE% %3
@@ -27,20 +51,20 @@ for /f %%h in ('git rev-parse HEAD 2^>nul') do set OLD_COMMIT=%%h
 git fetch %REMOTE% || goto error
 
 rem Get the new commit hash from remote
-for /f %%h in ('git rev-parse %REMOTE%/%BRANCH% 2^>nul') do set NEW_COMMIT=%%h
+for /f %%h in ('git rev-parse %REMOTE%/!BRANCH! 2^>nul') do set NEW_COMMIT=%%h
 
 rem Show what's changing if there are updates
-if not "%OLD_COMMIT%"=="%NEW_COMMIT%" (
+if not "!OLD_COMMIT!"=="!NEW_COMMIT!" (
   echo.
   echo === UPDATE SUMMARY ===
-  echo From: %OLD_COMMIT:~0,7%
-  echo To:   %NEW_COMMIT:~0,7%
+  echo From: !OLD_COMMIT:~0,7!
+  echo To:   !NEW_COMMIT:~0,7!
   echo.
   echo New commits:
-  git log --oneline %OLD_COMMIT%..%NEW_COMMIT%
+  git log --oneline !OLD_COMMIT!..!NEW_COMMIT!
   echo.
   echo Files changed:
-  git diff --stat %OLD_COMMIT%..%NEW_COMMIT%
+  git diff --stat !OLD_COMMIT!..!NEW_COMMIT!
   echo.
   echo ======================
   echo.
@@ -48,10 +72,10 @@ if not "%OLD_COMMIT%"=="%NEW_COMMIT%" (
   echo Already up to date - no changes detected.
 )
 
-git reset --hard %REMOTE%/%BRANCH% || goto error
+git reset --hard %REMOTE%/!BRANCH! || goto error
 git clean -fd || goto error
 
-echo Done: local tree now matches %REMOTE%/%BRANCH%.
+echo Done: local tree now matches %REMOTE%/!BRANCH!.
 exit /b 0
 
 :add_remote
