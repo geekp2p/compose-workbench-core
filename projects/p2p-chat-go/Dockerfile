@@ -18,7 +18,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o p2p-chat ./cmd/p2p-chat
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o p2p-chat .
 
 # Stage 2: Create minimal runtime image
 FROM alpine:latest
