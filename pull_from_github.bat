@@ -14,9 +14,9 @@ if "%BRANCH%"=="" (
   echo Fetching latest branches...
   git fetch %REMOTE% --quiet 2>nul
 
-  rem Get the latest claude/ branch (first line only using for loop break)
+  rem Get the latest claude/ branch (sorted by commit date, using authordate for accuracy)
   set LATEST_BRANCH=
-  for /f "delims=" %%b in ('git for-each-ref --sort^=-committerdate --format^="%%(refname:short)" refs/remotes/%REMOTE%/claude/ 2^>nul') do (
+  for /f "delims=" %%b in ('git for-each-ref --sort^=-authordate --format^="%%(refname:short)" refs/remotes/%REMOTE%/claude/ 2^>nul') do (
     if not defined LATEST_BRANCH set LATEST_BRANCH=%%b
   )
 
@@ -24,7 +24,13 @@ if "%BRANCH%"=="" (
   if defined LATEST_BRANCH (
     set "BRANCH=!LATEST_BRANCH:%REMOTE%/=!"
     echo Found latest claude branch: !BRANCH!
+
+    rem Show branch date for confirmation
+    for /f "tokens=*" %%d in ('git log -1 --format^="%%ai" refs/remotes/!LATEST_BRANCH! 2^>nul') do (
+      echo Branch date: %%d
+    )
   ) else (
+    echo No claude/ branches found on remote, using current branch...
     rem Fallback to current branch
     for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set BRANCH=%%b
   )
