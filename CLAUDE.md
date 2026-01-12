@@ -6,7 +6,7 @@ Refactor + standardize scripts and compose files while keeping behavior unchange
 ## Structure
 - Root scripts: up.ps1/down.ps1/clean.ps1/service.ps1 and cmd wrappers
 - Projects live in ./projects/*
-  - go-hello, node-hello, py-hello, solo-node
+  - go-hello, node-hello, py-hello
 - Templates: 5 base templates (see TEMPLATES.md)
   - go-template, node-template, python-template, web-stack, microservice
 
@@ -73,7 +73,7 @@ Refactor + standardize scripts and compose files while keeping behavior unchange
 - Check for port conflicts before assigning new ones
 
 ### Multi-Service Projects
-When working with projects that have multiple services (e.g., solo-node, web-stack):
+When working with projects that have multiple services (e.g., web-stack, microservice):
 
 1. **Always use `depends_on` with health checks:**
    ```yaml
@@ -324,14 +324,14 @@ Before committing changes, verify:
   .\up.ps1 go-hello -Build
   .\up.ps1 node-hello -Build
   .\up.ps1 py-hello -Build
-  .\up.ps1 solo-node -Build
+  .\up.ps1 web-stack -Build
   ```
 
 - [ ] **Multi-service management works**
   ```powershell
-  .\service.ps1 solo-node -List
-  .\service.ps1 solo-node -Service bitcoin-main -Start
-  .\service.ps1 solo-node -Service bitcoin-main -Logs
+  .\service.ps1 web-stack -List
+  .\service.ps1 web-stack -Service web-frontend -Start
+  .\service.ps1 web-stack -Service api-backend -Logs
   ```
 
 - [ ] **Health checks pass**

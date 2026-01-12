@@ -364,7 +364,6 @@ function Show-TopicHelp {
       Write-Host "    Examples:" -ForegroundColor White
       Write-Host "      - web-stack: web, api, db (3 services)" -ForegroundColor DarkGray
       Write-Host "      - microservice: service, redis (2 services)" -ForegroundColor DarkGray
-      Write-Host "      - solo-node: 6 Bitcoin/mining services" -ForegroundColor DarkGray
       Write-Host ""
       Write-Host "  Default Behavior:" -ForegroundColor Cyan
       Write-Host "    .\up.ps1 <project>      # Starts ALL services" -ForegroundColor White

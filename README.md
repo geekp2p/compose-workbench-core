@@ -108,7 +108,6 @@ curl http://localhost:8002
 - `go-hello` - ใช้ go-template
 - `node-hello` - ใช้ node-template
 - `py-hello` - ใช้ python-template
-- `solo-node` - Custom stack (Bitcoin mining)
 
 > 📖 ดูรายละเอียด templates เพิ่มเติมที่ [TEMPLATES.md](TEMPLATES.md)
 
@@ -128,8 +127,7 @@ multi-compose-labV2/
 └── projects/           # โฟลเดอร์เก็บทุกโปรเจค
     ├── go-hello/       # โปรเจค Go (port 8002)
     ├── node-hello/     # โปรเจค Node.js (port 8003)
-    ├── py-hello/       # โปรเจค Python (port 8001)
-    └── solo-node/      # โปรเจค Custom multi-service
+    └── py-hello/       # โปรเจค Python (port 8001)
 ```
 
 **แต่ละโปรเจค** มี Docker Compose ของตัวเองแยกกัน ทำให้:
@@ -162,43 +160,37 @@ up.cmd go-hello -Build
 
 #### รัน Services ทั้งหมดพร้อมกัน
 ```powershell
-# ตัวอย่าง: solo-node มี Bitcoin + CKPool + BFGMiner (6 services)
-.\up.ps1 solo-node -Build
+# ตัวอย่าง: web-stack มี Frontend + Backend + Database (3 services)
+.\up.ps1 web-stack -Build
 
 # Docker Compose จะรัน services ทั้งหมดใน compose.yml:
-#   - bitcoin-main (Bitcoin Core mainnet)
-#   - bitcoin-testnet (Bitcoin Core testnet)
-#   - ckpool-main (CKPool mainnet)
-#   - ckpool-test (CKPool testnet)
-#   - bfgproxy-main (BFGMiner proxy mainnet)
-#   - bfgproxy-test (BFGMiner proxy testnet)
+#   - web-frontend (Node.js)
+#   - api-backend (Python)
+#   - postgres (PostgreSQL)
 ```
 
 #### รันเฉพาะบาง Services (Selective Start)
 ```powershell
-# รันเฉพาะ testnet services
-.\service.ps1 solo-node -Service bitcoin-testnet,ckpool-test -Start
+# รันเฉพาะ backend และ database
+.\service.ps1 web-stack -Service api-backend,postgres -Start
 
-# รันเฉพาะ mainnet
-.\service.ps1 solo-node -Service bitcoin-main,ckpool-main,bfgproxy-main -Start
-
-# รันเฉพาะ 1 service
-.\service.ps1 solo-node -Service bitcoin-main -Start
+# รันเฉพาะ frontend
+.\service.ps1 web-stack -Service web-frontend -Start
 ```
 
 #### จัดการ Services แบบละเอียด
 ```powershell
 # List services ทั้งหมดในโปรเจค
-.\service.ps1 solo-node -List
+.\service.ps1 web-stack -List
 
 # Stop เฉพาะบาง services
-.\service.ps1 solo-node -Service ckpool-main -Stop
+.\service.ps1 web-stack -Service api-backend -Stop
 
 # Restart service
-.\service.ps1 solo-node -Service bitcoin-testnet -Restart
+.\service.ps1 web-stack -Service web-frontend -Restart
 
 # ดู logs ของ service
-.\service.ps1 solo-node -Service ckpool-main -Logs
+.\service.ps1 web-stack -Service postgres -Logs
 ```
 
 **หมายเหตุ:** Services ทั้งหมดใน compose.yml เดียวกัน จะอยู่ใน network เดียวกัน สื่อสารกันได้ทันที
@@ -418,6 +410,7 @@ curl http://localhost:8005/api/health  # Backend API
 
 # เสร็จแล้ว
 .\down.ps1 web-stack
+.\clean.ps1 -Project web-stack
 ```
 
 ### Scenario 3: รันหลาย Projects พร้อมกัน (Development Environment)
@@ -447,30 +440,29 @@ docker ps
 .\down.ps1 py-hello
 ```
 
-### Scenario 4: Multi-Service Project (Bitcoin Mining Stack)
+### Scenario 4: Microservice with Caching Layer
 ```powershell
-# รัน Bitcoin mining stack ทั้งหมด (6 services)
-.\up.ps1 solo-node -Build
+# รัน microservice stack (Go API + Redis cache)
+.\up.ps1 microservice -Build
 
 # ตรวจสอบ services
-.\service.ps1 solo-node -List
+.\service.ps1 microservice -List
 # Output:
-#   - bitcoin-main, bitcoin-testnet
-#   - ckpool-main, ckpool-test
-#   - bfgproxy-main, bfgproxy-test
+#   - api-service (Go API) → http://localhost:8007
+#   - redis-cache (Redis) → localhost:6379
 
-# รันเฉพาะ testnet (ประหยัดทรัพยากร)
-.\down.ps1 solo-node
-.\service.ps1 solo-node -Service bitcoin-testnet,ckpool-test,bfgproxy-test -Start
+# ทดสอบ API endpoint
+curl http://localhost:8007/api/data
 
-# ดู logs ของ ckpool
-.\service.ps1 solo-node -Service ckpool-test -Logs
+# ดู logs ของ API
+.\service.ps1 microservice -Service api-service -Logs
 
-# Restart เฉพาะ Bitcoin node
-.\service.ps1 solo-node -Service bitcoin-testnet -Restart
+# Restart เฉพาะ Redis cache
+.\service.ps1 microservice -Service redis-cache -Restart
 
 # เสร็จแล้ว หยุดทั้งหมด
-.\down.ps1 solo-node
+.\down.ps1 microservice
+.\clean.ps1 -Project microservice
 ```
 
 ### Scenario 5: Cleanup Workflow (HDD เต็ม!)
