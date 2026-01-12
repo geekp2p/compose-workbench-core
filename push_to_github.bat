@@ -18,6 +18,9 @@ rem Check for uncommitted changes before pushing
 call :check_uncommitted_changes
 if %ERRORLEVEL% EQU 2 exit /b 0
 
+rem Ensure git email is configured correctly to avoid GitHub privacy restrictions
+call :ensure_git_email_configured
+
 echo Pushing local branch to %REMOTE%/%BRANCH% ...
 git remote get-url %REMOTE% >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
@@ -137,6 +140,53 @@ if "%ADD_REMOTE_URL%"=="" (
 git remote add %ADD_REMOTE_NAME% %ADD_REMOTE_URL% || exit /b 1
 echo Added remote %ADD_REMOTE_NAME% with %ADD_REMOTE_URL%.
 git fetch --quiet %ADD_REMOTE_NAME% 2>nul
+exit /b 0
+
+:ensure_git_email_configured
+rem Check and fix git email configuration to avoid GitHub privacy restrictions
+rem GitHub blocks pushes with private emails like noreply@anthropic.com
+
+rem Get current configured email
+for /f "delims=" %%e in ('git config user.email 2^>nul') do set GIT_EMAIL=%%e
+
+rem Check if email contains problematic domains
+echo %GIT_EMAIL% | findstr /C:"anthropic.com" >nul
+if %ERRORLEVEL% EQU 0 goto fix_email
+
+rem Check if email is empty
+if "%GIT_EMAIL%"=="" goto fix_email
+
+rem Email looks okay
+exit /b 0
+
+:fix_email
+rem Try to get GitHub username and ID from remote
+for /f "tokens=2 delims=:/" %%u in ('git remote get-url %REMOTE% 2^>nul') do set GITHUB_USER=%%u
+if "%GITHUB_USER%"=="" set GITHUB_USER=user
+
+rem Set GitHub no-reply email format
+rem Common format: ID+username@users.noreply.github.com
+rem Fallback: username@users.noreply.github.com
+
+echo.
+echo [AUTO-FIX] Configuring git email to avoid GitHub privacy restrictions...
+echo Current email: %GIT_EMAIL%
+
+rem Try to extract ID from existing commits
+for /f "tokens=1 delims=+" %%i in ('git log -1 --format^=%%ae 2^>nul ^| findstr "@users.noreply.github.com"') do set GITHUB_ID=%%i
+
+if defined GITHUB_ID (
+  rem Found ID in history, use it
+  git config user.email "%GITHUB_ID%+%GITHUB_USER%@users.noreply.github.com"
+  echo New email: %GITHUB_ID%+%GITHUB_USER%@users.noreply.github.com
+) else (
+  rem No ID found, use simple format
+  git config user.email "%GITHUB_USER%@users.noreply.github.com"
+  echo New email: %GITHUB_USER%@users.noreply.github.com
+)
+
+echo [AUTO-FIX] Email configured successfully
+echo.
 exit /b 0
 
 :notrepo
