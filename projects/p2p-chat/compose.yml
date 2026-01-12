@@ -1,0 +1,22 @@
+name: p2p-chat
+
+services:
+  chat-node:
+    build: .
+    stdin_open: true      # Enable interactive mode
+    tty: true             # Allocate a pseudo-TTY
+    environment:
+      - CHAT_TOPIC=${CHAT_TOPIC:-p2p-chat-default}
+      - NODE_ENV=production
+    volumes:
+      - chat-data:/app/data    # Persist message history
+    networks:
+      - p2p-network
+    restart: unless-stopped
+
+volumes:
+  chat-data:    # Named volume for message persistence
+
+networks:
+  p2p-network:
+    driver: bridge
