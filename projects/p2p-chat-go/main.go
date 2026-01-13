@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -12,9 +13,24 @@ import (
 	"github.com/geekp2p/p2p-chat-go/internal/messaging"
 	"github.com/geekp2p/p2p-chat-go/internal/node"
 	"github.com/geekp2p/p2p-chat-go/internal/storage"
+	"github.com/geekp2p/p2p-chat-go/internal/updater"
 )
 
 func main() {
+	// Parse command-line flags
+	versionFlag := flag.Bool("version", false, "Show version information")
+	flag.Parse()
+
+	// Handle --version flag
+	if *versionFlag {
+		fmt.Println(updater.GetVersionInfo())
+		os.Exit(0)
+	}
+
+	// Print version on startup
+	fmt.Printf("🚀 %s\n", updater.GetVersionInfo())
+	fmt.Println()
+
 	// Get configuration from environment variables
 	chatTopic := os.Getenv("CHAT_TOPIC")
 	if chatTopic == "" {
