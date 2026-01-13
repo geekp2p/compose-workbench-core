@@ -12,9 +12,16 @@ import (
 	"github.com/geekp2p/p2p-chat-go/internal/messaging"
 	"github.com/geekp2p/p2p-chat-go/internal/node"
 	"github.com/geekp2p/p2p-chat-go/internal/storage"
+	"github.com/geekp2p/p2p-chat-go/internal/updater"
 )
 
 func main() {
+	// Print version info
+	fmt.Printf("P2P Chat v%s\n", updater.Version)
+
+	// Check for updates in background (non-blocking)
+	go checkForUpdatesAsync()
+
 	// Get configuration from environment variables
 	chatTopic := os.Getenv("CHAT_TOPIC")
 	if chatTopic == "" {
@@ -81,6 +88,25 @@ func main() {
 	if err := chatCLI.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "CLI error: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// checkForUpdatesAsync checks for updates in the background without blocking startup
+func checkForUpdatesAsync() {
+	// Give the app some time to start up before checking
+	time.Sleep(2 * time.Second)
+
+	release, hasUpdate, err := updater.CheckForUpdate(updater.Version)
+	if err != nil {
+		// Silently fail - don't interrupt user experience
+		return
+	}
+
+	if hasUpdate && release != nil {
+		fmt.Println()
+		fmt.Printf("🎉 New version available: %s (current: %s)\n", release.TagName, updater.Version)
+		fmt.Println("Run /update command to upgrade automatically")
+		fmt.Println()
 	}
 }
 

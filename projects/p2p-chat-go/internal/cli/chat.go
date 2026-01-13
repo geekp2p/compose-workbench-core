@@ -10,6 +10,7 @@ import (
 
 	"github.com/geekp2p/p2p-chat-go/internal/messaging"
 	"github.com/geekp2p/p2p-chat-go/internal/storage"
+	"github.com/geekp2p/p2p-chat-go/internal/updater"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -182,6 +183,10 @@ func (c *ChatCLI) handleCommand(cmd string) {
 		c.showHistory()
 	case "/verbose":
 		c.toggleVerbose()
+	case "/version":
+		c.showVersion()
+	case "/update":
+		c.performUpdate()
 	case "/quit", "/exit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
@@ -198,6 +203,8 @@ func (c *ChatCLI) showHelp() {
 	fmt.Println("  /mesh     - List peers in the chat topic mesh (actual chat participants)")
 	fmt.Println("  /history  - Show recent message history")
 	fmt.Println("  /verbose  - Toggle verbose mode (show connection logs)")
+	fmt.Println("  /version  - Show current version and check for updates")
+	fmt.Println("  /update   - Download and install the latest version")
 	fmt.Println("  /quit     - Exit the chat")
 	fmt.Println()
 }
@@ -268,4 +275,59 @@ func (c *ChatCLI) toggleVerbose() {
 	} else {
 		fmt.Println("✓ Verbose mode disabled (connection logs hidden)")
 	}
+}
+
+// showVersion displays version information and checks for updates
+func (c *ChatCLI) showVersion() {
+	currentVersion := updater.GetCurrentVersion()
+	fmt.Printf("\nCurrent version: %s\n", currentVersion)
+	fmt.Println("Checking for updates...")
+
+	release, hasUpdate, err := updater.CheckForUpdate(currentVersion)
+	if err != nil {
+		fmt.Printf("Failed to check for updates: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if hasUpdate && release != nil {
+		fmt.Printf("✨ New version available: %s\n", release.TagName)
+		fmt.Println("Run /update to upgrade")
+	} else {
+		fmt.Println("✓ You are running the latest version")
+	}
+	fmt.Println()
+}
+
+// performUpdate downloads and installs the latest version
+func (c *ChatCLI) performUpdate() {
+	currentVersion := updater.GetCurrentVersion()
+	fmt.Println("\nChecking for updates...")
+
+	release, hasUpdate, err := updater.CheckForUpdate(currentVersion)
+	if err != nil {
+		fmt.Printf("Failed to check for updates: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if !hasUpdate {
+		fmt.Println("✓ You are already running the latest version")
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("Updating from %s to %s...\n", currentVersion, release.TagName)
+	fmt.Println("This will download and replace the current binary.")
+
+	if err := updater.DownloadAndUpdate(release); err != nil {
+		fmt.Printf("Update failed: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	fmt.Println("\n✓ Update complete!")
+	fmt.Println("Please restart the application to use the new version.")
+	fmt.Println("Type /quit to exit and restart.")
+	fmt.Println()
 }
