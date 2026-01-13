@@ -1,0 +1,97 @@
+name: Release P2P Chat
+
+on:
+  push:
+    tags:
+      - 'p2p-chat-v*'  # Trigger on tags like p2p-chat-v0.1.0
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Extract version from tag (e.g., p2p-chat-v0.1.0 -> 0.1.0)
+          VERSION=${GITHUB_REF#refs/tags/p2p-chat-v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Update version in code
+        run: |
+          # Update the version in updater.go
+          sed -i 's/var Version = ".*"/var Version = "${{ steps.version.outputs.version }}"/' \
+            projects/p2p-chat-go/internal/updater/updater.go
+
+      - name: Build binaries
+        run: |
+          cd projects/p2p-chat-go
+
+          # Create output directory
+          mkdir -p ../../dist
+
+          # Build for Linux AMD64
+          echo "Building for Linux AMD64..."
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../../dist/p2p-chat-linux-amd64
+
+          # Build for Linux ARM64
+          echo "Building for Linux ARM64..."
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ../../dist/p2p-chat-linux-arm64
+
+          # Build for Windows AMD64
+          echo "Building for Windows AMD64..."
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ../../dist/p2p-chat-windows-amd64.exe
+
+          # Build for Windows ARM64
+          echo "Building for Windows ARM64..."
+          GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o ../../dist/p2p-chat-windows-arm64.exe
+
+          # Build for macOS AMD64 (Intel)
+          echo "Building for macOS AMD64..."
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ../../dist/p2p-chat-darwin-amd64
+
+          # Build for macOS ARM64 (Apple Silicon)
+          echo "Building for macOS ARM64..."
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ../../dist/p2p-chat-darwin-arm64
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum p2p-chat-* > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: P2P Chat ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/p2p-chat-linux-amd64
+            dist/p2p-chat-linux-arm64
+            dist/p2p-chat-windows-amd64.exe
+            dist/p2p-chat-windows-arm64.exe
+            dist/p2p-chat-darwin-amd64
+            dist/p2p-chat-darwin-arm64
+            dist/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: dist/*
+          retention-days: 30
