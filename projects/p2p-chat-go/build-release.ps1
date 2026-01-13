@@ -41,10 +41,10 @@ function Write-ColorOutput {
 
 # Print banner
 Write-Host ""
-Write-ColorOutput "╔═══════════════════════════════════════════════════╗" -Color Blue
-Write-ColorOutput "║     P2P Chat Multi-Platform Build System         ║" -Color Blue
-Write-ColorOutput "║     Windows PowerShell Version                    ║" -Color Blue
-Write-ColorOutput "╚═══════════════════════════════════════════════════╝" -Color Blue
+Write-ColorOutput "+===================================================+" -Color Blue
+Write-ColorOutput "|     P2P Chat Multi-Platform Build System         |" -Color Blue
+Write-ColorOutput "|     Windows PowerShell Version                    |" -Color Blue
+Write-ColorOutput "+===================================================+" -Color Blue
 Write-Host ""
 
 # Get version from argument or extract from updater.go
@@ -53,7 +53,9 @@ if ([string]::IsNullOrEmpty($Version)) {
         $updaterFile = "internal\updater\updater.go"
         if (Test-Path $updaterFile) {
             $content = Get-Content $updaterFile -Raw
-            if ($content -match 'var Version = "([^"]+)"') {
+            # Use variable to avoid PowerShell 5.1 parsing issues with [^ in regex
+            $versionPattern = 'var Version = "([^"]+)"'
+            if ($content -match $versionPattern) {
                 $Version = $Matches[1]
                 Write-ColorOutput "No version specified, using version from updater.go: $Version" -Color Yellow
             } else {
@@ -198,9 +200,9 @@ if ($checksumContent.Count -gt 0) {
 }
 
 # Summary
-Write-ColorOutput "╔═══════════════════════════════════════════════════╗" -Color Blue
-Write-ColorOutput "║              Build Summary                        ║" -Color Blue
-Write-ColorOutput "╚═══════════════════════════════════════════════════╝" -Color Blue
+Write-ColorOutput "+===================================================+" -Color Blue
+Write-ColorOutput "|              Build Summary                        |" -Color Blue
+Write-ColorOutput "+===================================================+" -Color Blue
 Write-ColorOutput "Version:     $Version" -Color Green
 Write-ColorOutput "Directory:   $DIST_DIR" -Color Green
 Write-ColorOutput "Binaries:    $buildSuccess successful, $buildFailed failed" -Color Green
