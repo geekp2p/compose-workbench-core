@@ -10,6 +10,7 @@ import (
 
 	"github.com/geekp2p/p2p-chat-go/internal/messaging"
 	"github.com/geekp2p/p2p-chat-go/internal/storage"
+	"github.com/geekp2p/p2p-chat-go/internal/updater"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -182,6 +183,8 @@ func (c *ChatCLI) handleCommand(cmd string) {
 		c.showHistory()
 	case "/verbose":
 		c.toggleVerbose()
+	case "/version":
+		c.showVersion()
 	case "/quit", "/exit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
@@ -198,6 +201,7 @@ func (c *ChatCLI) showHelp() {
 	fmt.Println("  /mesh     - List peers in the chat topic mesh (actual chat participants)")
 	fmt.Println("  /history  - Show recent message history")
 	fmt.Println("  /verbose  - Toggle verbose mode (show connection logs)")
+	fmt.Println("  /version  - Show version information")
 	fmt.Println("  /quit     - Exit the chat")
 	fmt.Println()
 }
@@ -268,4 +272,11 @@ func (c *ChatCLI) toggleVerbose() {
 	} else {
 		fmt.Println("✓ Verbose mode disabled (connection logs hidden)")
 	}
+}
+
+// showVersion displays version information
+func (c *ChatCLI) showVersion() {
+	fmt.Println()
+	fmt.Println(updater.GetVersionInfo())
+	fmt.Println()
 }

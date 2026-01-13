@@ -1,0 +1,181 @@
+name: Release P2P Chat
+
+on:
+  push:
+    tags:
+      - 'p2p-chat-v*'  # Trigger on tags like p2p-chat-v0.1.0
+
+permissions:
+  contents: write  # Required for creating releases
+
+jobs:
+  build-and-release:
+    name: Build and Release P2P Chat
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for changelog
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache-dependency-path: projects/p2p-chat-go/go.sum
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Extract version from tag (e.g., p2p-chat-v0.1.0 -> 0.1.0)
+          VERSION=${GITHUB_REF#refs/tags/p2p-chat-v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Build binaries for all platforms
+        working-directory: projects/p2p-chat-go
+        run: |
+          # Create dist directory
+          mkdir -p ../../dist
+
+          # Build for all platforms
+          PLATFORMS=(
+            "linux/amd64"
+            "linux/arm64"
+            "windows/amd64"
+            "windows/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+          )
+
+          VERSION="${{ steps.version.outputs.version }}"
+          GO_MODULE="github.com/geekp2p/p2p-chat-go"
+          LDFLAGS="-s -w -X ${GO_MODULE}/internal/updater.Version=${VERSION}"
+
+          for PLATFORM in "${PLATFORMS[@]}"; do
+            IFS="/" read -r GOOS GOARCH <<< "$PLATFORM"
+
+            OUTPUT_NAME="p2p-chat-${GOOS}-${GOARCH}"
+            if [ "$GOOS" = "windows" ]; then
+              OUTPUT_NAME="${OUTPUT_NAME}.exe"
+            fi
+
+            echo "Building $GOOS/$GOARCH..."
+            env GOOS="$GOOS" GOARCH="$GOARCH" CGO_ENABLED=0 \
+              go build \
+              -ldflags="$LDFLAGS" \
+              -o "../../dist/${OUTPUT_NAME}" \
+              .
+
+            echo "✓ Built: ${OUTPUT_NAME}"
+          done
+
+      - name: Generate checksums
+        working-directory: dist
+        run: |
+          sha256sum p2p-chat-* > checksums.txt
+          echo "Generated checksums:"
+          cat checksums.txt
+
+      - name: List built files
+        run: |
+          echo "Built binaries:"
+          ls -lh dist/
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Get commits since last tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD)
+          else
+            COMMITS=$(git log --pretty=format:"- %s (%h)" HEAD)
+          fi
+
+          # Create release notes
+          cat > release_notes.md << EOF
+          ## P2P Chat v${VERSION}
+
+          ### 📦 Binaries
+
+          Download the appropriate binary for your platform:
+
+          **Linux:**
+          - \`p2p-chat-linux-amd64\` - Linux x86_64
+          - \`p2p-chat-linux-arm64\` - Linux ARM64
+
+          **Windows:**
+          - \`p2p-chat-windows-amd64.exe\` - Windows x86_64
+          - \`p2p-chat-windows-arm64.exe\` - Windows ARM64
+
+          **macOS:**
+          - \`p2p-chat-darwin-amd64\` - macOS Intel
+          - \`p2p-chat-darwin-arm64\` - macOS Apple Silicon (M1/M2/M3)
+
+          ### 🔐 Verification
+
+          Verify your download using SHA256 checksums (see \`checksums.txt\`):
+
+          \`\`\`bash
+          # Linux/macOS
+          sha256sum -c checksums.txt
+
+          # Windows (PowerShell)
+          Get-FileHash p2p-chat-windows-amd64.exe -Algorithm SHA256
+          \`\`\`
+
+          ### 🚀 Quick Start
+
+          \`\`\`bash
+          # Linux/macOS - make executable and run
+          chmod +x p2p-chat-*
+          ./p2p-chat-linux-amd64
+
+          # Windows - just run
+          p2p-chat-windows-amd64.exe
+          \`\`\`
+
+          ### 📝 Changes
+
+          ${COMMITS}
+
+          ### 🐛 Bug Reports
+
+          Report issues at: https://github.com/geekp2p/compose-workbench-core/issues
+          EOF
+
+          echo "Release notes generated:"
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/p2p-chat-linux-amd64
+            dist/p2p-chat-linux-arm64
+            dist/p2p-chat-windows-amd64.exe
+            dist/p2p-chat-windows-arm64.exe
+            dist/p2p-chat-darwin-amd64
+            dist/p2p-chat-darwin-arm64
+            dist/checksums.txt
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build summary
+        run: |
+          echo "### ✅ Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${GITHUB_REF#refs/tags/}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Built Binaries:" >> $GITHUB_STEP_SUMMARY
+          ls -lh dist/ | tail -n +2 >> $GITHUB_STEP_SUMMARY
