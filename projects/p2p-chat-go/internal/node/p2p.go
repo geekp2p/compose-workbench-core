@@ -140,6 +140,18 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 
 	// Create a new PubSub service using GossipSub with optimized configuration
 	// These parameters are tuned for reliable mesh formation and message delivery
+	// Start with default params to avoid divide-by-zero errors from missing fields
+	gossipParams := pubsub.DefaultGossipSubParams()
+	// Override specific parameters for smaller networks
+	gossipParams.D = 3                      // Desired mesh size (reduced from default 6 for smaller networks)
+	gossipParams.Dlo = 2                    // Lower bound (reduced from default 4)
+	gossipParams.Dhi = 5                    // Upper bound (reduced from default 12)
+	gossipParams.Dlazy = 3                  // Lazy propagation factor
+	gossipParams.HeartbeatInterval = 1 * time.Second // More frequent heartbeats for faster mesh formation
+	gossipParams.FanoutTTL = 60 * time.Second
+	gossipParams.GossipFactor = 0.25
+	gossipParams.GossipRetransmission = 3
+
 	ps, err := pubsub.NewGossipSub(ctx, h,
 		// Enable message signing for security
 		pubsub.WithMessageSigning(true),
@@ -149,18 +161,8 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 		pubsub.WithPeerExchange(true),
 		// Set flood publishing to ensure message delivery even with small mesh
 		pubsub.WithFloodPublish(true),
-		// Set lower D parameters for small networks (default D=6 may be too high)
-		// D is the desired number of peers in the mesh
-		pubsub.WithGossipSubParams(pubsub.GossipSubParams{
-			D:                    3,               // Desired mesh size (reduced from default 6 for smaller networks)
-			Dlo:                  2,               // Lower bound (reduced from default 4)
-			Dhi:                  5,               // Upper bound (reduced from default 12)
-			Dlazy:                3,               // Lazy propagation factor
-			HeartbeatInterval:    1 * time.Second, // More frequent heartbeats for faster mesh formation
-			FanoutTTL:            60 * time.Second,
-			GossipFactor:         0.25,
-			GossipRetransmission: 3,
-		}),
+		// Apply our customized gossipsub parameters
+		pubsub.WithGossipSubParams(gossipParams),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pubsub: %w", err)
