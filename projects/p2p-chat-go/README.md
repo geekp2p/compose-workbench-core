@@ -27,6 +27,8 @@ A fully decentralized peer-to-peer chat application built with **Go** and **libp
 - **BadgerDB Storage**: Fast, embedded key-value store
 - **Graceful Shutdown**: Cleanup on CTRL+C
 - **go-libp2p**: Reference implementation with best performance
+- **NAT Traversal**: Circuit Relay v2, AutoNAT, and Hole Punching for cross-network connectivity
+- **Multi-Transport**: TCP and QUIC support for better connectivity
 
 ---
 
@@ -61,7 +63,13 @@ p2p-chat-go/
 - Creates libp2p host with random identity
 - Initializes Kademlia DHT for peer routing
 - Implements peer discovery via DHT
-- Listens on `/ip4/0.0.0.0/tcp/0` (random port)
+- Listens on `/ip4/0.0.0.0/tcp/0` (random TCP port) and `/ip4/0.0.0.0/udp/0/quic-v1` (QUIC)
+- **NAT Traversal Features**:
+  - **Circuit Relay v2**: Enables connection through relay servers when direct connection fails
+  - **AutoNAT**: Automatically detects if behind NAT and helps other peers
+  - **Hole Punching**: Attempts direct connections through NAT when possible
+  - **UPnP/NAT-PMP**: Automatic port mapping for compatible routers
+  - **Public Relay Servers**: Connects to community relay nodes for NAT traversal
 
 #### 2. **Messaging** (`internal/messaging/pubsub.go`)
 - GossipSub protocol for efficient message propagation
@@ -322,6 +330,40 @@ Messages are JSON-encoded:
 2. **Check network** - ensure Docker containers can communicate
 3. **Same topic** - verify `CHAT_TOPIC` environment variable matches
 4. **Bootstrap nodes** - libp2p uses public bootstrap nodes by default
+5. **NAT/Firewall** - the app will attempt to use relay servers for NAT traversal
+
+### Cross-Network Connectivity
+
+**Understanding NAT Traversal:**
+
+The application now supports connecting peers across different networks (e.g., home network to office network) using:
+
+1. **Direct Connection (Best)**:
+   - Works on same local network (LAN)
+   - Shows in logs: `✓ Connection established`
+
+2. **Hole Punching (Good)**:
+   - Attempts direct connection through NAT
+   - Both peers must support hole punching
+   - May take 30-60 seconds to establish
+
+3. **Circuit Relay (Fallback)**:
+   - Connection through public relay server
+   - Always works but adds latency
+   - Shows in logs: `✓ Connected to relay server`
+
+**Expected Behavior:**
+- **Same network** (10.1.1.x ↔ 10.1.1.y): Direct connection ✅
+- **Different networks** (10.1.1.x ↔ 192.168.0.y): Via relay or hole punching ✅
+- **Behind strict NAT**: Will use relay servers (may take longer to connect)
+
+**Logs to Look For:**
+```
+✓ Connected to relay server: 12D3Koo...
+✓ Running as relay service (can help relay for other peers)
+✓ Connection established: 12D3Koo...
+Note: Not running as relay service (this is normal)
+```
 
 ### Messages Not Appearing
 
@@ -419,8 +461,10 @@ Contributions welcome! This is a learning project for understanding P2P networki
 - Add end-to-end encryption
 - Implement file sharing
 - Web UI (libp2p works in browsers!)
-- Relay servers for NAT traversal
+- ✅ ~~Relay servers for NAT traversal~~ (Implemented!)
 - Direct peer connections (beyond pub/sub)
+- Private rooms with authentication
+- Message reactions and threading
 
 ---
 
