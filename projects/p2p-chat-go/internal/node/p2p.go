@@ -20,14 +20,15 @@ import (
 
 // P2PNode represents a libp2p node with P2P capabilities
 type P2PNode struct {
-	Host   host.Host
-	DHT    *dht.IpfsDHT
-	PubSub *pubsub.PubSub
-	Relay  *relay.Relay
+	Host    host.Host
+	DHT     *dht.IpfsDHT
+	PubSub  *pubsub.PubSub
+	Relay   *relay.Relay
+	Verbose bool // Enable verbose logging for debugging
 }
 
 // NewP2PNode creates a new P2P node with DHT and PubSub
-func NewP2PNode(ctx context.Context) (*P2PNode, error) {
+func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 	// Generate a new keypair for this host
 	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, 2048, rand.Reader)
 	if err != nil {
@@ -74,7 +75,7 @@ func NewP2PNode(ctx context.Context) (*P2PNode, error) {
 	}
 
 	// Connect to bootstrap peers
-	if err := connectToBootstrapPeers(ctx, h); err != nil {
+	if err := connectToBootstrapPeers(ctx, h, verbose); err != nil {
 		fmt.Printf("Warning: failed to connect to some bootstrap peers: %v\n", err)
 	}
 
@@ -89,17 +90,30 @@ func NewP2PNode(ctx context.Context) (*P2PNode, error) {
 	}
 
 	// Connect to public relay servers for NAT traversal
-	if err := connectToRelayServers(ctx, h); err != nil {
+	if err := connectToRelayServers(ctx, h, verbose); err != nil {
 		fmt.Printf("Warning: failed to connect to relay servers: %v\n", err)
 	}
 
-	// Set up connection notifications
+	// Create a P2PNode instance to pass verbose flag to connection handlers
+	node := &P2PNode{
+		Host:    h,
+		DHT:     nil, // Will be set later
+		PubSub:  nil, // Will be set later
+		Relay:   nil, // Will be set later
+		Verbose: verbose,
+	}
+
+	// Set up connection notifications (only show in verbose mode)
 	h.Network().Notify(&network.NotifyBundle{
 		ConnectedF: func(n network.Network, conn network.Conn) {
-			fmt.Printf("✓ Connection established: %s\n", conn.RemotePeer().ShortString())
+			if node.Verbose {
+				fmt.Printf("✓ Connection established: %s\n", conn.RemotePeer().ShortString())
+			}
 		},
 		DisconnectedF: func(n network.Network, conn network.Conn) {
-			fmt.Printf("✗ Connection lost: %s\n", conn.RemotePeer().ShortString())
+			if node.Verbose {
+				fmt.Printf("✗ Connection lost: %s\n", conn.RemotePeer().ShortString())
+			}
 		},
 	})
 
@@ -109,16 +123,16 @@ func NewP2PNode(ctx context.Context) (*P2PNode, error) {
 		return nil, fmt.Errorf("failed to create pubsub: %w", err)
 	}
 
-	return &P2PNode{
-		Host:   h,
-		DHT:    kadDHT,
-		PubSub: ps,
-		Relay:  relayService,
-	}, nil
+	// Update the node with DHT, PubSub, and Relay
+	node.DHT = kadDHT
+	node.PubSub = ps
+	node.Relay = relayService
+
+	return node, nil
 }
 
 // connectToBootstrapPeers connects to well-known bootstrap peers
-func connectToBootstrapPeers(ctx context.Context, h host.Host) error {
+func connectToBootstrapPeers(ctx context.Context, h host.Host, verbose bool) error {
 	// These are IPFS bootstrap nodes
 	bootstrapPeers := []string{
 		"/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
@@ -140,10 +154,14 @@ func connectToBootstrapPeers(ctx context.Context, h host.Host) error {
 		}
 
 		if err := h.Connect(ctx, *peerInfo); err != nil {
-			fmt.Printf("Failed to connect to %s: %v\n", peerInfo.ID, err)
+			if verbose {
+				fmt.Printf("Failed to connect to %s: %v\n", peerInfo.ID, err)
+			}
 		} else {
 			connected++
-			fmt.Printf("Connected to bootstrap peer: %s\n", peerInfo.ID)
+			if verbose {
+				fmt.Printf("Connected to bootstrap peer: %s\n", peerInfo.ID)
+			}
 		}
 	}
 
@@ -155,7 +173,7 @@ func connectToBootstrapPeers(ctx context.Context, h host.Host) error {
 }
 
 // connectToRelayServers connects to public relay servers for NAT traversal
-func connectToRelayServers(ctx context.Context, h host.Host) error {
+func connectToRelayServers(ctx context.Context, h host.Host, verbose bool) error {
 	// Public relay servers (libp2p community relays)
 	relayServers := []string{
 		// Official libp2p relay servers
@@ -168,21 +186,29 @@ func connectToRelayServers(ctx context.Context, h host.Host) error {
 	for _, relayAddr := range relayServers {
 		addr, err := multiaddr.NewMultiaddr(relayAddr)
 		if err != nil {
-			fmt.Printf("Invalid relay address %s: %v\n", relayAddr, err)
+			if verbose {
+				fmt.Printf("Invalid relay address %s: %v\n", relayAddr, err)
+			}
 			continue
 		}
 
 		relayInfo, err := peer.AddrInfoFromP2pAddr(addr)
 		if err != nil {
-			fmt.Printf("Failed to parse relay address %s: %v\n", relayAddr, err)
+			if verbose {
+				fmt.Printf("Failed to parse relay address %s: %v\n", relayAddr, err)
+			}
 			continue
 		}
 
 		if err := h.Connect(ctx, *relayInfo); err != nil {
-			fmt.Printf("Failed to connect to relay %s: %v\n", relayInfo.ID.ShortString(), err)
+			if verbose {
+				fmt.Printf("Failed to connect to relay %s: %v\n", relayInfo.ID.ShortString(), err)
+			}
 		} else {
 			connected++
-			fmt.Printf("✓ Connected to relay server: %s\n", relayInfo.ID.ShortString())
+			if verbose {
+				fmt.Printf("✓ Connected to relay server: %s\n", relayInfo.ID.ShortString())
+			}
 
 			// Reserve a slot on the relay for circuit connections
 			// This allows other peers to dial us through this relay
@@ -192,7 +218,9 @@ func connectToRelayServers(ctx context.Context, h host.Host) error {
 	if connected > 0 {
 		fmt.Printf("✓ Connected to %d relay server(s) for NAT traversal\n", connected)
 	} else {
-		fmt.Println("Note: No relay servers connected (direct connections only)")
+		if verbose {
+			fmt.Println("Note: No relay servers connected (direct connections only)")
+		}
 	}
 
 	return nil
@@ -220,9 +248,13 @@ func (n *P2PNode) DiscoverPeers(ctx context.Context, namespace string) error {
 
 			if n.Host.Network().Connectedness(peer.ID) != 1 {
 				if err := n.Host.Connect(ctx, peer); err != nil {
-					fmt.Printf("Failed to connect to peer %s: %v\n", peer.ID, err)
+					if n.Verbose {
+						fmt.Printf("Failed to connect to peer %s: %v\n", peer.ID, err)
+					}
 				} else {
-					fmt.Printf("Connected to peer: %s\n", peer.ID)
+					if n.Verbose {
+						fmt.Printf("Connected to peer: %s\n", peer.ID)
+					}
 				}
 			}
 		}

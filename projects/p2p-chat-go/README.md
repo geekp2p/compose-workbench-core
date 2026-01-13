@@ -160,6 +160,7 @@ Type /help for commands
 - `/help` - Show available commands
 - `/peers` - List connected peers with full IDs
 - `/history` - Show last 10 messages
+- `/verbose` - Toggle verbose mode (show/hide connection logs for debugging)
 - `/quit` - Exit gracefully
 - Just type text to send messages!
 
@@ -180,6 +181,30 @@ Recent messages:
 [user_5678] Welcome to the network (3m ago)
 [user_8532] Hello P2P World! (just now)
 ```
+
+### Verbose Mode (Debug Logs)
+
+By default, connection logs are **hidden** to keep the chat interface clean. If you need to see detailed connection logs for debugging:
+
+```
+> /verbose
+✓ Verbose mode enabled (connection logs will be shown)
+
+✓ Connection established: <peer.ID 12*9gd4bc>
+✓ Connection established: <peer.ID 12*1DJinx>
+✗ Connection lost: <peer.ID 12*foaRiZ>
+
+> /verbose
+✓ Verbose mode disabled (connection logs hidden)
+```
+
+**When to use verbose mode:**
+- Debugging connection issues
+- Monitoring peer discovery
+- Understanding NAT traversal behavior
+- Troubleshooting relay connections
+
+**Default behavior:** Verbose mode is OFF - you only see chat messages and command outputs
 
 ---
 
