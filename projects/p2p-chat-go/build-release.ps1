@@ -53,7 +53,7 @@ if ([string]::IsNullOrEmpty($Version)) {
         $updaterFile = "internal\updater\updater.go"
         if (Test-Path $updaterFile) {
             $content = Get-Content $updaterFile -Raw
-            if ($content -match 'var Version = "([^"]+)"') {
+            if ($content -match "var Version = `"([^`"]+)`"") {
                 $Version = $Matches[1]
                 Write-ColorOutput "No version specified, using version from updater.go: $Version" -Color Yellow
             } else {
