@@ -1,0 +1,44 @@
+.\up.ps1 p2p-chat-go -Build
+
+docker attach compose-workbench-core-chat-node-1
+
+////////////////
+
+# เทอร์มินัล 1
+.\up.ps1 p2p-chat-go -Build
+docker attach compose-workbench-core-chat-node-1
+
+# เทอร์มินัล 2
+docker compose -f projects/p2p-chat-go/compose.yml run --rm chat-node
+
+# เทอร์มินัล 3
+docker compose -f projects/p2p-chat-go/compose.yml run --rm chat-node
+
+
+//////////////////////////////
+
+run locally
+
+////
+
+cd projects/p2p-chat-go
+go mod download
+go run cmd/p2p-chat/main.go
+
+
+////
+
+คำสั่งในแอป (CLI)
+เมื่อเข้า CLI แล้วสามารถใช้คำสั่งเช่น:
+
+/help
+
+/peers
+
+/history
+
+/quit
+ตามที่ระบุใน README
+
+
+.\clean.ps1 -Project p2p-chat-go -Deep -Force
