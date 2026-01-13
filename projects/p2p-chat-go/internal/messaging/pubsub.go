@@ -30,6 +30,11 @@ type P2PMessaging struct {
 
 // NewP2PMessaging creates a new messaging instance
 func NewP2PMessaging(ctx context.Context, ps *pubsub.PubSub, topicName string, selfID peer.ID) (*P2PMessaging, error) {
+	// Register a topic validator before joining
+	if err := ps.RegisterTopicValidator(topicName, messageValidator); err != nil {
+		return nil, fmt.Errorf("failed to register topic validator: %w", err)
+	}
+
 	// Join the topic
 	topic, err := ps.Join(topicName)
 	if err != nil {
@@ -49,6 +54,31 @@ func NewP2PMessaging(ctx context.Context, ps *pubsub.PubSub, topicName string, s
 		ctx:          ctx,
 		selfID:       selfID,
 	}, nil
+}
+
+// messageValidator validates incoming messages
+func messageValidator(ctx context.Context, id peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+	// Try to unmarshal the message to validate structure
+	var chatMsg Message
+	if err := json.Unmarshal(msg.Data, &chatMsg); err != nil {
+		// Invalid JSON structure - reject
+		return pubsub.ValidationReject
+	}
+
+	// Validate message fields
+	if chatMsg.Type == "" || chatMsg.Username == "" || chatMsg.Timestamp == 0 {
+		// Missing required fields - reject
+		return pubsub.ValidationReject
+	}
+
+	// Validate message type
+	if chatMsg.Type != "message" && chatMsg.Type != "join" && chatMsg.Type != "leave" {
+		// Unknown message type - reject
+		return pubsub.ValidationReject
+	}
+
+	// Message is valid - accept
+	return pubsub.ValidationAccept
 }
 
 // PublishMessage publishes a message to the topic

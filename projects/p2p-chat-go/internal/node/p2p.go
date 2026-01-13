@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
+	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -25,6 +26,25 @@ type P2PNode struct {
 	PubSub  *pubsub.PubSub
 	Relay   *relay.Relay
 	Verbose bool // Enable verbose logging for debugging
+}
+
+// discoveryNotifee implements mdns.Notifee for local peer discovery
+type discoveryNotifee struct {
+	h       host.Host
+	verbose bool
+}
+
+// HandlePeerFound handles discovered peers from mDNS
+func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
+	if n.verbose {
+		fmt.Printf("✓ Discovered local peer via mDNS: %s\n", pi.ID.ShortString())
+	}
+	// Connect to discovered peer
+	if err := n.h.Connect(context.Background(), pi); err != nil {
+		if n.verbose {
+			fmt.Printf("Failed to connect to mDNS peer %s: %v\n", pi.ID.ShortString(), err)
+		}
+	}
 }
 
 // NewP2PNode creates a new P2P node with DHT and PubSub
@@ -117,10 +137,26 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 		},
 	})
 
-	// Create a new PubSub service using GossipSub
-	ps, err := pubsub.NewGossipSub(ctx, h)
+	// Create a new PubSub service using GossipSub with proper configuration
+	ps, err := pubsub.NewGossipSub(ctx, h,
+		// Enable message signing for security
+		pubsub.WithMessageSigning(true),
+		// Enable strict signature verification
+		pubsub.WithStrictSignatureVerification(true),
+		// Enable peer exchange
+		pubsub.WithPeerExchange(true),
+		// Set flood publishing to ensure message delivery
+		pubsub.WithFloodPublish(true),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pubsub: %w", err)
+	}
+
+	// Setup mDNS for local peer discovery
+	if err := setupMDNS(h, verbose); err != nil {
+		fmt.Printf("Warning: mDNS discovery not available: %v\n", err)
+	} else if verbose {
+		fmt.Println("✓ mDNS local peer discovery enabled")
 	}
 
 	// Update the node with DHT, PubSub, and Relay
@@ -260,6 +296,17 @@ func (n *P2PNode) DiscoverPeers(ctx context.Context, namespace string) error {
 		}
 	}()
 
+	return nil
+}
+
+// setupMDNS initializes mDNS discovery for local network peers
+func setupMDNS(h host.Host, verbose bool) error {
+	// Create a new mDNS service
+	notifee := &discoveryNotifee{h: h, verbose: verbose}
+	ser := mdns.NewMdnsService(h, "p2p-chat-mdns", notifee)
+	if ser == nil {
+		return fmt.Errorf("failed to create mDNS service")
+	}
 	return nil
 }
 
