@@ -85,7 +85,7 @@ try {
         Write-ColorOutput "Error: Go is not installed or not in PATH" -Color Red
         exit 1
     }
-    Write-ColorOutput "✓ Go version: $goVersion" -Color Green
+    Write-ColorOutput "[OK] Go version: $goVersion" -Color Green
     Write-Host ""
 }
 catch {
@@ -99,7 +99,7 @@ if (Test-Path $DIST_DIR) {
     Remove-Item -Path $DIST_DIR -Recurse -Force
 }
 New-Item -ItemType Directory -Path $DIST_DIR -Force | Out-Null
-Write-ColorOutput "✓ Created: $DIST_DIR" -Color Green
+Write-ColorOutput "[OK] Created: $DIST_DIR" -Color Green
 Write-Host ""
 
 # Build for each platform
@@ -146,18 +146,18 @@ foreach ($platform in $PLATFORMS) {
                 $sizeStr = "${fileSizeKB}KB"
             }
 
-            Write-ColorOutput "✓ Built: $OUTPUT_NAME ($sizeStr)" -Color Green
+            Write-ColorOutput "[OK] Built: $OUTPUT_NAME ($sizeStr)" -Color Green
             Write-Host ""
             $buildSuccess++
         } else {
-            Write-ColorOutput "✗ Failed to build $OUTPUT_NAME" -Color Red
+            Write-ColorOutput "[FAIL] Failed to build $OUTPUT_NAME" -Color Red
             Write-ColorOutput "Error: $buildOutput" -Color Red
             Write-Host ""
             $buildFailed++
         }
     }
     catch {
-        Write-ColorOutput "✗ Failed to build $OUTPUT_NAME" -Color Red
+        Write-ColorOutput "[FAIL] Failed to build $OUTPUT_NAME" -Color Red
         Write-ColorOutput "Error: $_" -Color Red
         Write-Host ""
         $buildFailed++
@@ -195,7 +195,7 @@ Get-ChildItem -Path $DIST_DIR -Filter "p2p-chat-*" -File | ForEach-Object {
 
 if ($checksumContent.Count -gt 0) {
     $checksumContent | Out-File -FilePath $CHECKSUM_FILE -Encoding utf8
-    Write-ColorOutput "✓ Checksums generated: checksums.txt" -Color Green
+    Write-ColorOutput "[OK] Checksums generated: checksums.txt" -Color Green
     Write-Host ""
 }
 
@@ -224,7 +224,7 @@ Get-ChildItem -Path $DIST_DIR -File | ForEach-Object {
 }
 
 Write-Host ""
-Write-ColorOutput "✓ Build completed successfully!" -Color Green
+Write-ColorOutput "[OK] Build completed successfully!" -Color Green
 Write-Host ""
 
 Write-ColorOutput "To test binaries:" -Color Blue
