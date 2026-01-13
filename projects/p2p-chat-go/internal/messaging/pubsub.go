@@ -141,6 +141,11 @@ func (m *P2PMessaging) ReadMessages() <-chan *Message {
 	return msgChan
 }
 
+// GetTopicPeers returns the list of peers in the GossipSub mesh for this topic
+func (m *P2PMessaging) GetTopicPeers() []peer.ID {
+	return m.topic.ListPeers()
+}
+
 // Close closes the messaging resources
 func (m *P2PMessaging) Close() error {
 	m.subscription.Cancel()

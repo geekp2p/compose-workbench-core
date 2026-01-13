@@ -64,11 +64,17 @@ func (c *ChatCLI) Start() error {
 
 // printWelcome displays the welcome message
 func (c *ChatCLI) printWelcome() {
+	meshPeers := c.messaging.GetTopicPeers()
+	networkPeers := c.host.Network().Peers()
+
 	fmt.Println("\n=== P2P Chat Started ===")
 	fmt.Printf("Your Peer ID: %s\n", c.host.ID())
 	fmt.Printf("Listening on: %s\n", c.host.Addrs()[0])
 	fmt.Printf("Username: %s\n", c.username)
-	fmt.Printf("\nConnected peers: %d\n", len(c.host.Network().Peers()))
+	fmt.Printf("\nNetwork peers: %d | Chat mesh peers: %d\n", len(networkPeers), len(meshPeers))
+	if len(meshPeers) == 0 {
+		fmt.Println("⚠ No peers in chat mesh yet - use /mesh to check status")
+	}
 	fmt.Println("Type /help for commands")
 	fmt.Println()
 }
@@ -170,6 +176,8 @@ func (c *ChatCLI) handleCommand(cmd string) {
 		c.showHelp()
 	case "/peers":
 		c.showPeers()
+	case "/mesh":
+		c.showMeshPeers()
 	case "/history":
 		c.showHistory()
 	case "/verbose":
@@ -186,7 +194,8 @@ func (c *ChatCLI) handleCommand(cmd string) {
 func (c *ChatCLI) showHelp() {
 	fmt.Println("\nAvailable Commands:")
 	fmt.Println("  /help     - Show this help message")
-	fmt.Println("  /peers    - List connected peers")
+	fmt.Println("  /peers    - List all connected network peers")
+	fmt.Println("  /mesh     - List peers in the chat topic mesh (actual chat participants)")
 	fmt.Println("  /history  - Show recent message history")
 	fmt.Println("  /verbose  - Toggle verbose mode (show connection logs)")
 	fmt.Println("  /quit     - Exit the chat")
@@ -196,9 +205,26 @@ func (c *ChatCLI) showHelp() {
 // showPeers displays connected peers
 func (c *ChatCLI) showPeers() {
 	peers := c.host.Network().Peers()
-	fmt.Printf("\nConnected Peers (%d):\n", len(peers))
+	fmt.Printf("\nConnected Network Peers (%d):\n", len(peers))
+	fmt.Println("(These are all libp2p connections including bootstrap nodes and relays)")
 	for _, p := range peers {
 		fmt.Printf("  - %s\n", p)
+	}
+	fmt.Println()
+}
+
+// showMeshPeers displays peers in the GossipSub mesh for the chat topic
+func (c *ChatCLI) showMeshPeers() {
+	meshPeers := c.messaging.GetTopicPeers()
+	fmt.Printf("\nChat Topic Mesh Peers (%d):\n", len(meshPeers))
+	fmt.Println("(These are actual chat participants who can receive your messages)")
+	if len(meshPeers) == 0 {
+		fmt.Println("  ⚠ No peers in mesh - your messages may not be received!")
+		fmt.Println("  Wait a few seconds for peers to discover each other.")
+	} else {
+		for _, p := range meshPeers {
+			fmt.Printf("  - %s\n", p)
+		}
 	}
 	fmt.Println()
 }
