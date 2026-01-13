@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -137,16 +138,29 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 		},
 	})
 
-	// Create a new PubSub service using GossipSub with proper configuration
+	// Create a new PubSub service using GossipSub with optimized configuration
+	// These parameters are tuned for reliable mesh formation and message delivery
 	ps, err := pubsub.NewGossipSub(ctx, h,
 		// Enable message signing for security
 		pubsub.WithMessageSigning(true),
 		// Enable strict signature verification
 		pubsub.WithStrictSignatureVerification(true),
-		// Enable peer exchange
+		// Enable peer exchange to help discover more peers
 		pubsub.WithPeerExchange(true),
-		// Set flood publishing to ensure message delivery
+		// Set flood publishing to ensure message delivery even with small mesh
 		pubsub.WithFloodPublish(true),
+		// Set lower D parameters for small networks (default D=6 may be too high)
+		// D is the desired number of peers in the mesh
+		pubsub.WithGossipSubParams(pubsub.GossipSubParams{
+			D:   3,  // Desired mesh size (reduced from default 6 for smaller networks)
+			Dlo: 2,  // Lower bound (reduced from default 4)
+			Dhi: 5,  // Upper bound (reduced from default 12)
+			Dlazy: 3, // Lazy propagation factor
+			HeartbeatInterval: 1 * time.Second, // More frequent heartbeats for faster mesh formation
+			FanoutTTL: 60 * time.Second,
+			GossipFactor: 0.25,
+			GossipRetransmission: 3,
+		}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pubsub: %w", err)
