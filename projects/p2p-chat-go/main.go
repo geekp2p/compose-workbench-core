@@ -38,9 +38,9 @@ func main() {
 		cancel()
 	}()
 
-	// Initialize P2P node
+	// Initialize P2P node (verbose mode off by default)
 	fmt.Println("Initializing P2P node...")
-	p2pNode, err := node.NewP2PNode(ctx)
+	p2pNode, err := node.NewP2PNode(ctx, false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create P2P node: %v\n", err)
 		os.Exit(1)
@@ -71,8 +71,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Warning: peer discovery failed: %v\n", err)
 	}
 
-	// Start CLI
-	chatCLI := cli.NewChatCLI(p2pNode.Host, msg, store)
+	// Start CLI (pass verbose flag pointer so it can be toggled)
+	chatCLI := cli.NewChatCLI(p2pNode.Host, msg, store, &p2pNode.Verbose)
 	if err := chatCLI.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "CLI error: %v\n", err)
 		os.Exit(1)

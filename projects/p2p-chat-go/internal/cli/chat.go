@@ -21,16 +21,18 @@ type ChatCLI struct {
 	store        *storage.MessageStore
 	username     string
 	displayNames map[peer.ID]string
+	verboseMode  *bool // Pointer to P2PNode's Verbose flag
 }
 
 // NewChatCLI creates a new CLI instance
-func NewChatCLI(h host.Host, msg *messaging.P2PMessaging, store *storage.MessageStore) *ChatCLI {
+func NewChatCLI(h host.Host, msg *messaging.P2PMessaging, store *storage.MessageStore, verboseMode *bool) *ChatCLI {
 	return &ChatCLI{
 		host:         h,
 		messaging:    msg,
 		store:        store,
 		username:     generateUsername(),
 		displayNames: make(map[peer.ID]string),
+		verboseMode:  verboseMode,
 	}
 }
 
@@ -170,6 +172,8 @@ func (c *ChatCLI) handleCommand(cmd string) {
 		c.showPeers()
 	case "/history":
 		c.showHistory()
+	case "/verbose":
+		c.toggleVerbose()
 	case "/quit", "/exit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
@@ -184,6 +188,7 @@ func (c *ChatCLI) showHelp() {
 	fmt.Println("  /help     - Show this help message")
 	fmt.Println("  /peers    - List connected peers")
 	fmt.Println("  /history  - Show recent message history")
+	fmt.Println("  /verbose  - Toggle verbose mode (show connection logs)")
 	fmt.Println("  /quit     - Exit the chat")
 	fmt.Println()
 }
@@ -222,4 +227,19 @@ func (c *ChatCLI) showHistory() {
 		}
 	}
 	fmt.Println()
+}
+
+// toggleVerbose toggles verbose mode on/off
+func (c *ChatCLI) toggleVerbose() {
+	if c.verboseMode == nil {
+		fmt.Println("Verbose mode control is not available")
+		return
+	}
+
+	*c.verboseMode = !*c.verboseMode
+	if *c.verboseMode {
+		fmt.Println("✓ Verbose mode enabled (connection logs will be shown)")
+	} else {
+		fmt.Println("✓ Verbose mode disabled (connection logs hidden)")
+	}
 }
