@@ -183,6 +183,109 @@ git push origin p2p-chat-v0.2.0
 
 ---
 
+## 📤 Manual Release Upload
+
+If you prefer to upload releases manually instead of using GitHub Actions:
+
+### Prerequisites
+
+1. **Install GitHub CLI:**
+   - Windows: `winget install GitHub.cli` or `choco install gh`
+   - macOS: `brew install gh`
+   - Linux: `sudo apt install gh`
+
+2. **Authenticate:**
+   ```bash
+   gh auth login
+   ```
+
+### Upload Release
+
+#### On Windows
+
+```cmd
+REM Upload with auto-detected version
+upload-release.cmd
+
+REM Test without uploading (dry run)
+upload-release.ps1 -DryRun
+```
+
+#### On Linux/macOS
+
+```bash
+# Upload with auto-detected version
+./upload-release.sh
+
+# Test without uploading (dry run)
+./upload-release.sh --dry-run
+```
+
+### What the Upload Script Does
+
+1. ✅ Reads version from `internal/updater/updater.go`
+2. ✅ Creates git tag (e.g., `p2p-chat-v0.1.0`)
+3. ✅ Pushes tag to GitHub
+4. ✅ Creates GitHub release with description
+5. ✅ Uploads all binaries from `dist/` directory
+6. ✅ Uploads checksums.txt
+7. ✅ Provides release URL
+
+### Example Output
+
+```
++===================================================+
+|     P2P Chat GitHub Release Uploader             |
++===================================================+
+
+Using version from updater.go: 0.1.0
+
+[OK] GitHub CLI is installed
+[OK] Authenticated with GitHub
+
+Found 6 binaries to upload:
+  - p2p-chat-darwin-amd64 (30.84 MB)
+  - p2p-chat-darwin-arm64 (29.45 MB)
+  - p2p-chat-linux-amd64 (29.32 MB)
+  - p2p-chat-linux-arm64 (27.75 MB)
+  - p2p-chat-windows-amd64.exe (30.01 MB)
+  - p2p-chat-windows-arm64.exe (28.05 MB)
+
+[OK] Checksums file found
+
+Creating tag p2p-chat-v0.1.0...
+[OK] Tag created: p2p-chat-v0.1.0
+
+Pushing tag to remote...
+[OK] Tag pushed to remote
+
+Creating GitHub release...
+[OK] GitHub release created
+
+Uploading binaries to release...
+[OK] Uploaded: p2p-chat-darwin-amd64
+[OK] Uploaded: p2p-chat-darwin-arm64
+[OK] Uploaded: p2p-chat-linux-amd64
+[OK] Uploaded: p2p-chat-linux-arm64
+[OK] Uploaded: p2p-chat-windows-amd64.exe
+[OK] Uploaded: p2p-chat-windows-arm64.exe
+[OK] Uploaded: checksums.txt
+
++===================================================+
+|              Upload Summary                       |
++===================================================+
+Version:     0.1.0
+Tag:         p2p-chat-v0.1.0
+Uploaded:    7 files
+
+[OK] Release upload completed!
+
+View release at:
+  https://github.com/geekp2p/compose-workbench-core/releases/tag/p2p-chat-v0.1.0
+```
+
+---
+
 ## 🔨 Local Build
 
 ### Build All Platforms
