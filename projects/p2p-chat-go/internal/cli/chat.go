@@ -68,7 +68,8 @@ func (c *ChatCLI) printWelcome() {
 	fmt.Printf("Your Peer ID: %s\n", c.host.ID())
 	fmt.Printf("Listening on: %s\n", c.host.Addrs()[0])
 	fmt.Printf("Username: %s\n", c.username)
-	fmt.Printf("\nConnected peers: %d\n", len(c.host.Network().Peers()))
+	fmt.Printf("\nConnected peers (network): %d\n", len(c.host.Network().Peers()))
+	fmt.Printf("Connected peers (in topic): %d\n", len(c.messaging.GetTopicPeers()))
 	fmt.Println("Type /help for commands")
 	fmt.Println()
 }

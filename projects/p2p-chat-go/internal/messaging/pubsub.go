@@ -66,10 +66,15 @@ func (m *P2PMessaging) PublishMessage(msgType, content, username string) error {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
 
+	// Debug: Show topic peers
+	peers := m.topic.ListPeers()
+	fmt.Printf("[DEBUG] Publishing to %d peers in topic\n", len(peers))
+
 	if err := m.topic.Publish(m.ctx, msgBytes); err != nil {
 		return fmt.Errorf("failed to publish message: %w", err)
 	}
 
+	fmt.Printf("[DEBUG] Message published successfully\n")
 	return nil
 }
 
@@ -87,8 +92,11 @@ func (m *P2PMessaging) ReadMessages() <-chan *Message {
 				return
 			}
 
-			// Skip messages from ourselves
+			fmt.Printf("[DEBUG] Received message from: %s\n", msg.ReceivedFrom.ShortString())
+
+			// Skip messages from ourselves (self-published messages)
 			if msg.ReceivedFrom == m.selfID {
+				fmt.Printf("[DEBUG] Skipping self-published message\n")
 				continue
 			}
 
@@ -99,9 +107,13 @@ func (m *P2PMessaging) ReadMessages() <-chan *Message {
 				continue
 			}
 
+			fmt.Printf("[DEBUG] Unmarshaled message: Type=%s, From=%s, Username=%s\n",
+				chatMsg.Type, chatMsg.From, chatMsg.Username)
+
 			// Send to channel
 			select {
 			case msgChan <- &chatMsg:
+				fmt.Printf("[DEBUG] Message sent to channel\n")
 			case <-m.ctx.Done():
 				return
 			}
@@ -109,6 +121,11 @@ func (m *P2PMessaging) ReadMessages() <-chan *Message {
 	}()
 
 	return msgChan
+}
+
+// GetTopicPeers returns list of peers in the topic
+func (m *P2PMessaging) GetTopicPeers() []peer.ID {
+	return m.topic.ListPeers()
 }
 
 // Close closes the messaging resources
