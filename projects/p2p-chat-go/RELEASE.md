@@ -2,6 +2,8 @@
 
 Complete guide for building and releasing P2P Chat binaries.
 
+**✨ NEW:** Full Windows support with PowerShell scripts! See [Local Build](#local-build) for details.
+
 ---
 
 ## 📋 Table of Contents
@@ -12,13 +14,42 @@ Complete guide for building and releasing P2P Chat binaries.
 - [GitHub Actions Release](#github-actions-release)
 - [Version Management](#version-management)
 - [Troubleshooting](#troubleshooting)
+  - [Windows-Specific Issues](#windows-specific-issues)
 - [Advanced Topics](#advanced-topics)
+
+---
+
+## 🪟 Windows Users
+
+If you're on Windows 11 (or Windows 10), you have **three options** to build releases:
+
+1. **Easiest:** Use `build-release.cmd` (works everywhere)
+   ```cmd
+   cd projects\p2p-chat-go
+   build-release.cmd
+   ```
+
+2. **PowerShell:** Use `build-release.ps1` directly
+   ```powershell
+   cd projects\p2p-chat-go
+   .\build-release.ps1
+   ```
+
+3. **WSL/Git Bash:** Use the Linux shell script
+   ```bash
+   cd projects/p2p-chat-go
+   ./build-release.sh
+   ```
+
+**All three methods produce identical binaries for all 6 platforms!**
 
 ---
 
 ## 🚀 Quick Start
 
 ### Create a New Release (Automated via GitHub Actions)
+
+#### On Linux / macOS / WSL
 
 ```bash
 # 1. Update version in code
@@ -28,6 +59,30 @@ vi internal/updater/updater.go
 
 # 2. Commit changes
 git add internal/updater/updater.go
+git commit -m "chore: bump version to 0.2.0"
+git push
+
+# 3. Create and push tag (must start with p2p-chat-v)
+git tag p2p-chat-v0.2.0
+git push origin p2p-chat-v0.2.0
+
+# 4. Done! GitHub Actions will automatically:
+#    - Build binaries for 6 platforms
+#    - Generate checksums
+#    - Create GitHub release
+#    - Upload all binaries
+```
+
+#### On Windows
+
+```powershell
+# 1. Update version in code
+cd projects\p2p-chat-go
+notepad internal\updater\updater.go
+# Change: var Version = "0.2.0"
+
+# 2. Commit changes
+git add internal\updater\updater.go
 git commit -m "chore: bump version to 0.2.0"
 git push
 
@@ -132,6 +187,8 @@ git push origin p2p-chat-v0.2.0
 
 ### Build All Platforms
 
+#### On Linux / macOS / WSL
+
 ```bash
 cd projects/p2p-chat-go
 
@@ -141,6 +198,34 @@ cd projects/p2p-chat-go
 # Or use version from updater.go
 ./build-release.sh
 ```
+
+#### On Windows
+
+**Option 1: Using Command Prompt / CMD**
+
+```cmd
+cd projects\p2p-chat-go
+
+REM Build with specific version
+build-release.cmd 0.2.0
+
+REM Or use version from updater.go
+build-release.cmd
+```
+
+**Option 2: Using PowerShell**
+
+```powershell
+cd projects\p2p-chat-go
+
+# Build with specific version
+.\build-release.ps1 -Version "0.2.0"
+
+# Or use version from updater.go
+.\build-release.ps1
+```
+
+**Note:** The Windows scripts (`build-release.cmd` and `build-release.ps1`) work on both PowerShell 5.1 (Windows PowerShell) and PowerShell 7+ (PowerShell Core).
 
 ### Output
 
@@ -173,6 +258,8 @@ compose-workbench-core/
 
 ### Build for Single Platform
 
+#### On Linux / macOS / WSL
+
 ```bash
 # Linux AMD64
 GOOS=linux GOARCH=amd64 go build -o p2p-chat-linux .
@@ -182,6 +269,38 @@ GOOS=windows GOARCH=amd64 go build -o p2p-chat-windows.exe .
 
 # macOS ARM64 (Apple Silicon)
 GOOS=darwin GOARCH=arm64 go build -o p2p-chat-macos .
+```
+
+#### On Windows PowerShell
+
+```powershell
+# Linux AMD64
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o p2p-chat-linux .
+
+# Windows AMD64
+$env:GOOS="windows"; $env:GOARCH="amd64"; go build -o p2p-chat-windows.exe .
+
+# macOS ARM64 (Apple Silicon)
+$env:GOOS="darwin"; $env:GOARCH="arm64"; go build -o p2p-chat-macos .
+```
+
+#### On Windows CMD
+
+```cmd
+REM Linux AMD64
+set GOOS=linux
+set GOARCH=amd64
+go build -o p2p-chat-linux .
+
+REM Windows AMD64
+set GOOS=windows
+set GOARCH=amd64
+go build -o p2p-chat-windows.exe .
+
+REM macOS ARM64 (Apple Silicon)
+set GOOS=darwin
+set GOARCH=arm64
+go build -o p2p-chat-macos .
 ```
 
 ---
@@ -433,6 +552,67 @@ Before releasing a new version:
 3. **Check Go supports the platform**
    ```bash
    go tool dist list | grep -E "linux|windows|darwin"
+   ```
+
+### Windows-Specific Issues
+
+**Problem:** PowerShell script execution is disabled
+
+**Error:** `build-release.ps1 cannot be loaded because running scripts is disabled on this system`
+
+**Solutions:**
+
+1. **Temporary bypass (recommended for testing)**
+   ```powershell
+   PowerShell -ExecutionPolicy Bypass -File .\build-release.ps1
+   ```
+
+2. **Use the CMD wrapper (easiest)**
+   ```cmd
+   build-release.cmd
+   ```
+
+3. **Change execution policy for current user**
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   .\build-release.ps1
+   ```
+
+**Problem:** Can't find `pwsh` or `powershell` command
+
+**Solutions:**
+
+1. **Check if PowerShell is in PATH**
+   ```cmd
+   where powershell
+   where pwsh
+   ```
+
+2. **Use full path**
+   ```cmd
+   C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -File build-release.ps1
+   ```
+
+3. **Install PowerShell 7+** (recommended)
+   - Download from: https://github.com/PowerShell/PowerShell/releases
+   - Or use winget: `winget install Microsoft.PowerShell`
+
+**Problem:** Build fails with "Access denied" or permission errors
+
+**Solutions:**
+
+1. **Run as Administrator**
+   - Right-click PowerShell → "Run as administrator"
+   - Navigate to project folder and run script
+
+2. **Check antivirus**
+   - Temporarily disable antivirus
+   - Add exception for Go build tools
+
+3. **Use different output directory**
+   ```powershell
+   # Edit build-release.ps1 to use different path
+   $DIST_DIR = "C:\temp\dist"
    ```
 
 ---
