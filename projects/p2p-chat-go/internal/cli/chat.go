@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -185,6 +186,8 @@ func (c *ChatCLI) handleCommand(cmd string) {
 		c.toggleVerbose()
 	case "/version":
 		c.showVersion()
+	case "/update":
+		c.performUpdate()
 	case "/quit", "/exit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
@@ -202,6 +205,7 @@ func (c *ChatCLI) showHelp() {
 	fmt.Println("  /history  - Show recent message history")
 	fmt.Println("  /verbose  - Toggle verbose mode (show connection logs)")
 	fmt.Println("  /version  - Show version information")
+	fmt.Println("  /update   - Check for updates and update binary")
 	fmt.Println("  /quit     - Exit the chat")
 	fmt.Println()
 }
@@ -278,5 +282,91 @@ func (c *ChatCLI) toggleVerbose() {
 func (c *ChatCLI) showVersion() {
 	fmt.Println()
 	fmt.Println(updater.GetVersionInfo())
+	fmt.Println()
+}
+
+// performUpdate checks for and performs binary update
+func (c *ChatCLI) performUpdate() {
+	fmt.Println("\n=== P2P Chat Update ===")
+	fmt.Printf("Current version: v%s\n", updater.Version)
+	fmt.Printf("Platform: %s/%s\n\n", runtime.GOOS, runtime.GOARCH)
+
+	// Check for updates first
+	fmt.Println("Checking for updates...")
+	release, hasUpdate, err := updater.CheckForUpdates("geekp2p", "compose-workbench-core")
+	if err != nil {
+		fmt.Printf("❌ Failed to check for updates: %v\n\n", err)
+		return
+	}
+
+	if !hasUpdate {
+		fmt.Printf("✓ You are already running the latest version (v%s)\n\n", updater.Version)
+		return
+	}
+
+	// Show update information
+	latestVersion := strings.TrimPrefix(release.TagName, "p2p-chat-v")
+	fmt.Printf("📦 New version available: v%s\n", latestVersion)
+	fmt.Printf("Current version: v%s\n\n", updater.Version)
+
+	// Find the binary asset for current platform
+	downloadURL, err := updater.GetDownloadURL(release)
+	if err != nil {
+		fmt.Printf("❌ %v\n\n", err)
+		return
+	}
+
+	// Find the size of the binary
+	var binarySize int64
+	binaryName := ""
+	if runtime.GOOS == "windows" {
+		binaryName = fmt.Sprintf("p2p-chat-%s-%s.exe", runtime.GOOS, runtime.GOARCH)
+	} else {
+		binaryName = fmt.Sprintf("p2p-chat-%s-%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	for _, asset := range release.Assets {
+		if asset.Name == binaryName {
+			binarySize = asset.Size
+			break
+		}
+	}
+
+	fmt.Printf("Binary: %s (%s)\n", binaryName, updater.FormatSize(binarySize))
+	fmt.Printf("URL: %s\n\n", downloadURL)
+
+	// Ask for confirmation
+	fmt.Print("Do you want to update now? (y/N): ")
+	var response string
+	fmt.Scanln(&response)
+	response = strings.ToLower(strings.TrimSpace(response))
+
+	if response != "y" && response != "yes" {
+		fmt.Println("Update cancelled.\n")
+		return
+	}
+
+	// Progress callback to show download progress
+	lastPercent := -1
+	progressCallback := func(downloaded, total int64) {
+		if total > 0 {
+			percent := int(float64(downloaded) / float64(total) * 100)
+			if percent != lastPercent && percent%10 == 0 {
+				fmt.Printf("  Downloaded: %s / %s (%d%%)\n",
+					updater.FormatSize(downloaded),
+					updater.FormatSize(total),
+					percent)
+				lastPercent = percent
+			}
+		}
+	}
+
+	// Perform update
+	fmt.Println()
+	if err := updater.PerformUpdate("geekp2p", "compose-workbench-core", progressCallback); err != nil {
+		fmt.Printf("\n❌ Update failed: %v\n\n", err)
+		return
+	}
+
 	fmt.Println()
 }

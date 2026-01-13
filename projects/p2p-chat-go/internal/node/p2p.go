@@ -13,9 +13,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
-	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -65,13 +65,13 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 			"/ip4/0.0.0.0/udp/0/quic-v1",
 		),
 		// Enable NAT traversal features
-		libp2p.NATPortMap(),                    // UPnP and NAT-PMP port mapping
-		libp2p.EnableNATService(),              // Help other peers detect their NAT status
+		libp2p.NATPortMap(),       // UPnP and NAT-PMP port mapping
+		libp2p.EnableNATService(), // Help other peers detect their NAT status
 		libp2p.EnableAutoRelayWithStaticRelays( // Enable circuit relay v2 client
 			[]peer.AddrInfo{},
 		),
-		libp2p.EnableHolePunching(),            // Enable hole punching
-		libp2p.EnableRelay(),                   // Allow being relayed through other peers
+		libp2p.EnableHolePunching(), // Enable hole punching
+		libp2p.EnableRelay(),        // Allow being relayed through other peers
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create host: %w", err)
@@ -152,13 +152,13 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 		// Set lower D parameters for small networks (default D=6 may be too high)
 		// D is the desired number of peers in the mesh
 		pubsub.WithGossipSubParams(pubsub.GossipSubParams{
-			D:   3,  // Desired mesh size (reduced from default 6 for smaller networks)
-			Dlo: 2,  // Lower bound (reduced from default 4)
-			Dhi: 5,  // Upper bound (reduced from default 12)
-			Dlazy: 3, // Lazy propagation factor
-			HeartbeatInterval: 1 * time.Second, // More frequent heartbeats for faster mesh formation
-			FanoutTTL: 60 * time.Second,
-			GossipFactor: 0.25,
+			D:                    3,               // Desired mesh size (reduced from default 6 for smaller networks)
+			Dlo:                  2,               // Lower bound (reduced from default 4)
+			Dhi:                  5,               // Upper bound (reduced from default 12)
+			Dlazy:                3,               // Lazy propagation factor
+			HeartbeatInterval:    1 * time.Second, // More frequent heartbeats for faster mesh formation
+			FanoutTTL:            60 * time.Second,
+			GossipFactor:         0.25,
 			GossipRetransmission: 3,
 		}),
 	)
