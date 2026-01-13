@@ -90,7 +90,10 @@ func main() {
 
 	// Wait for peers to connect and mesh to stabilize
 	fmt.Println("Waiting for GossipSub mesh to form...")
-	waitForMesh(msg, 10) // Wait up to 10 seconds for mesh to form
+	waitForMesh(msg, 30) // Wait up to 30 seconds for mesh to form
+
+	// Start background mesh monitor to continuously improve connectivity
+	go monitorMesh(ctx, msg, p2pNode)
 
 	// Start CLI (pass verbose flag pointer so it can be toggled)
 	chatCLI := cli.NewChatCLI(p2pNode.Host, msg, store, &p2pNode.Verbose)
@@ -136,5 +139,41 @@ func waitForMesh(msg *messaging.P2PMessaging, maxSeconds int) {
 		fmt.Println("  This is normal if you're the first peer.")
 		fmt.Println("  Messages will be delivered as other peers join.")
 		fmt.Println("  Use /mesh to check mesh status.")
+	}
+}
+
+// monitorMesh periodically checks mesh status and reports changes
+func monitorMesh(ctx context.Context, msg *messaging.P2PMessaging, p2pNode *node.P2PNode) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	lastMeshCount := 0
+
+	for {
+		select {
+		case <-ticker.C:
+			meshPeers := msg.GetTopicPeers()
+			meshCount := len(meshPeers)
+
+			// Only report if mesh count changed
+			if meshCount != lastMeshCount {
+				if meshCount > lastMeshCount {
+					fmt.Printf("\n✓ Mesh expanded: %d → %d peers\n", lastMeshCount, meshCount)
+					if p2pNode.Verbose {
+						for _, peerID := range meshPeers {
+							fmt.Printf("  - %s\n", peerID.ShortString())
+						}
+					}
+				} else if meshCount < lastMeshCount && meshCount > 0 {
+					fmt.Printf("\n⚠ Mesh shrunk: %d → %d peers\n", lastMeshCount, meshCount)
+				} else if meshCount == 0 && lastMeshCount > 0 {
+					fmt.Printf("\n⚠ All mesh peers disconnected (was %d peers)\n", lastMeshCount)
+				}
+				lastMeshCount = meshCount
+			}
+
+		case <-ctx.Done():
+			return
+		}
 	}
 }
