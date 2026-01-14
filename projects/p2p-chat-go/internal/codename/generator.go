@@ -4,59 +4,69 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"net"
+	"os"
+	"strings"
+	"unicode"
+
+	"github.com/docker/docker/pkg/namesgenerator"
 )
 
-// Word lists for generating codenames
-var adjectives = []string{
-	"Swift", "Brave", "Mighty", "Silent", "Golden",
-	"Silver", "Crimson", "Azure", "Jade", "Amber",
-	"Shadow", "Thunder", "Lightning", "Storm", "Frost",
-	"Fire", "Iron", "Steel", "Diamond", "Crystal",
-	"Noble", "Royal", "Ancient", "Mystic", "Cosmic",
-	"Blazing", "Radiant", "Glowing", "Shining", "Bright",
-	"Dark", "Wild", "Free", "Bold", "Fierce",
-	"Wise", "Clever", "Swift", "Quick", "Rapid",
-	"Strong", "Tough", "Solid", "Steady", "Calm",
-	"Serene", "Peaceful", "Gentle", "Kind", "Pure",
-}
-
-var nouns = []string{
-	"Falcon", "Eagle", "Hawk", "Phoenix", "Dragon",
-	"Tiger", "Lion", "Wolf", "Bear", "Panther",
-	"Leopard", "Jaguar", "Cheetah", "Lynx", "Fox",
-	"Raven", "Owl", "Sparrow", "Robin", "Swan",
-	"Shark", "Whale", "Dolphin", "Orca", "Seal",
-	"Warrior", "Knight", "Guardian", "Sentinel", "Protector",
-	"Hunter", "Scout", "Ranger", "Explorer", "Voyager",
-	"Star", "Moon", "Sun", "Comet", "Nova",
-	"Mountain", "River", "Ocean", "Forest", "Desert",
-	"Wind", "Rain", "Snow", "Cloud", "Mist",
-}
-
 // GenerateFromMAC generates a deterministic codename from MAC address
-// Returns format: "Adjective Noun" (e.g., "Swift Falcon")
+// Returns format: "Adjective Surname" (e.g., "Focused Turing", "Admiring Lovelace")
+// Uses Docker's namesgenerator for familiar, memorable names
 func GenerateFromMAC() string {
 	// Try to get MAC address
 	mac, err := getMACAddress()
 	if err != nil {
-		// Fallback to random if MAC unavailable (use hostname as seed)
+		// Fallback to hostname-based seed if MAC unavailable
 		return generateFallback()
 	}
 
-	// Hash the MAC address to get a deterministic seed
+	// Hash MAC address to get deterministic seed
 	hash := sha256.Sum256([]byte(mac))
-	seed := binary.BigEndian.Uint64(hash[:8])
+	seed := int64(binary.BigEndian.Uint64(hash[:8]))
 
-	// Use seed to pick words deterministically
-	adjIndex := int(seed % uint64(len(adjectives)))
-	nounIndex := int((seed >> 32) % uint64(len(nouns)))
+	// Set random seed for deterministic generation
+	rand.Seed(seed)
 
-	return fmt.Sprintf("%s %s", adjectives[adjIndex], nouns[nounIndex])
+	// Generate name using Docker's namesgenerator
+	// Format: "adjective_surname" (e.g., "focused_turing")
+	rawName := namesgenerator.GetRandomName(0)
+
+	// Convert to title case: "Focused Turing"
+	return formatName(rawName)
+}
+
+// formatName converts "adjective_surname" to "Adjective Surname"
+func formatName(raw string) string {
+	parts := strings.Split(raw, "_")
+	if len(parts) != 2 {
+		return titleCase(raw)
+	}
+
+	adjective := titleCase(parts[0])
+	surname := titleCase(parts[1])
+
+	return fmt.Sprintf("%s %s", adjective, surname)
+}
+
+// titleCase converts "word" to "Word"
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	r[0] = unicode.ToUpper(r[0])
+	for i := 1; i < len(r); i++ {
+		r[i] = unicode.ToLower(r[i])
+	}
+	return string(r)
 }
 
 // GenerateWithUsername generates codename with traditional username
-// Returns format: "Swift Falcon (user_1234)"
+// Returns codename (e.g., "Focused Turing") and username (e.g., "user_1234")
 func GenerateWithUsername() (codename string, username string) {
 	codename = GenerateFromMAC()
 
@@ -117,26 +127,29 @@ func isVirtualInterface(name string) bool {
 }
 
 // generateFallback generates a codename when MAC is unavailable
-// Uses hostname or random seed
+// Uses hostname as seed for deterministic generation
 func generateFallback() string {
 	// Use hostname as backup seed
 	hostname := getHostname()
 	hash := sha256.Sum256([]byte(hostname))
-	seed := binary.BigEndian.Uint64(hash[:8])
+	seed := int64(binary.BigEndian.Uint64(hash[:8]))
 
-	adjIndex := int(seed % uint64(len(adjectives)))
-	nounIndex := int((seed >> 32) % uint64(len(nouns)))
+	// Set random seed for deterministic generation
+	rand.Seed(seed)
 
-	return fmt.Sprintf("%s %s", adjectives[adjIndex], nouns[nounIndex])
+	// Generate name using Docker's namesgenerator
+	rawName := namesgenerator.GetRandomName(0)
+
+	return formatName(rawName)
 }
 
 // getHostname safely retrieves hostname
 func getHostname() string {
-	hostname, err := net.LookupHost("localhost")
-	if err != nil || len(hostname) == 0 {
+	hostname, err := os.Hostname()
+	if err != nil || hostname == "" {
 		return "unknown-host"
 	}
-	return hostname[0]
+	return hostname
 }
 
 // GetMACInfo returns MAC address info for debugging

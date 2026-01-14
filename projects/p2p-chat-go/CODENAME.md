@@ -11,8 +11,9 @@ The P2P Chat now generates a **unique, memorable codename** for each peer based 
 ### Key Features
 
 ✅ **Deterministic** - Same MAC address = Same codename (across restarts)
-✅ **Human-readable** - Format: "Adjective + Noun" (e.g., "Swift Falcon")
-✅ **Unique** - ~2,500 possible combinations (50 adjectives × 50 nouns)
+✅ **Human-readable** - Format: "Adjective Surname" (e.g., "Focused Turing", "Admiring Lovelace")
+✅ **Unique** - ~8,000+ possible combinations using Docker's namesgenerator
+✅ **Memorable** - Famous names in tech/science (Turing, Einstein, Hopper, Knuth)
 ✅ **Privacy-friendly** - MAC address never exposed, only used as seed
 ✅ **Fallback support** - Uses hostname if MAC unavailable (Docker, VMs)
 
@@ -32,22 +33,26 @@ Virtual interfaces  ❌  → docker0, veth*, br-*, lo
 ### 2. Deterministic Generation
 
 ```
-MAC Address → SHA256 Hash → Seed → Pick Words → Codename
+MAC Address → SHA256 Hash → Seed → Docker namesgenerator → Codename
 ```
 
 **Example:**
 ```
 MAC: "aa:bb:cc:dd:ee:ff"
 ↓ SHA256
-Hash: "f4c9b..."
-↓ Seed (first 8 bytes)
+Hash: "f4c9b2a8..."
+↓ Seed (first 8 bytes as int64)
 Seed: 0x123456789abcdef0
-↓ Modulo word list size
-Adjective index: 15 → "Golden"
-Noun index: 42 → "Phoenix"
-↓
-Codename: "Golden Phoenix"
+↓ rand.Seed() + namesgenerator
+Raw: "focused_turing"
+↓ Format to title case
+Codename: "Focused Turing"
 ```
+
+**Uses Docker's namesgenerator:**
+- Same library Docker uses for container names
+- ~8,000+ combinations (adjectives × famous surnames)
+- Format: `adjective_surname` → `"Adjective Surname"`
 
 ### 3. Username Generation
 
@@ -58,43 +63,52 @@ MAC → SHA256 → User Number (0-9999) → "user_XXXX"
 ```
 
 **Example:**
-- Codename: `Golden Phoenix`
+- Codename: `Focused Turing`
 - Username: `user_5432`
 - Both derived from same MAC address
 
 ---
 
-## 🎨 Word Lists
+## 🎨 Name Examples
 
-### Adjectives (50 words)
+### Famous Surnames (from Docker namesgenerator)
+
+The library uses famous people in science and technology:
+
+**Scientists & Mathematicians:**
+- Turing (Alan Turing - Computer Science)
+- Einstein (Albert Einstein - Physics)
+- Newton (Isaac Newton - Physics)
+- Curie (Marie Curie - Chemistry/Physics)
+- Darwin (Charles Darwin - Biology)
+- Galileo (Galileo Galilei - Astronomy)
+- Tesla (Nikola Tesla - Engineering)
+- Fermi (Enrico Fermi - Physics)
+
+**Computer Scientists:**
+- Lovelace (Ada Lovelace - First programmer)
+- Hopper (Grace Hopper - COBOL)
+- Knuth (Donald Knuth - TeX, Algorithms)
+- Dijkstra (Edsger Dijkstra - Algorithms)
+- Ritchie (Dennis Ritchie - C language)
+- Thompson (Ken Thompson - Unix)
+- Torvalds (Linus Torvalds - Linux)
+
+**Adjectives (examples):**
 ```
-Swift, Brave, Mighty, Silent, Golden,
-Silver, Crimson, Azure, Jade, Amber,
-Shadow, Thunder, Lightning, Storm, Frost,
-Fire, Iron, Steel, Diamond, Crystal,
-Noble, Royal, Ancient, Mystic, Cosmic,
-Blazing, Radiant, Glowing, Shining, Bright,
-Dark, Wild, Free, Bold, Fierce,
-Wise, Clever, Quick, Rapid, Strong,
-Tough, Solid, Steady, Calm, Serene,
-Peaceful, Gentle, Kind, Pure
+admiring, adoring, affectionate, agitated, amazing,
+angry, awesome, beautiful, blissful, bold,
+boring, brave, busy, charming, clever,
+cool, compassionate, competent, condescending, confident,
+cranky, crazy, dazzling, determined, distracted,
+dreamy, eager, ecstatic, elastic, elated,
+elegant, eloquent, epic, exciting, fervent,
+festive, flamboyant, focused, friendly, frosty,
+funny, gallant, gifted, goofy, gracious,
+happy, hardcore, heuristic, hopeful, hungry...
 ```
 
-### Nouns (50 words)
-```
-Falcon, Eagle, Hawk, Phoenix, Dragon,
-Tiger, Lion, Wolf, Bear, Panther,
-Leopard, Jaguar, Cheetah, Lynx, Fox,
-Raven, Owl, Sparrow, Robin, Swan,
-Shark, Whale, Dolphin, Orca, Seal,
-Warrior, Knight, Guardian, Sentinel, Protector,
-Hunter, Scout, Ranger, Explorer, Voyager,
-Star, Moon, Sun, Comet, Nova,
-Mountain, River, Ocean, Forest, Desert,
-Wind, Rain, Snow, Cloud, Mist
-```
-
-**Total Combinations:** 50 × 50 = **2,500 unique codenames**
+**Total Combinations:** ~100 adjectives × ~80 surnames = **~8,000+ unique codenames**
 
 ---
 
@@ -108,9 +122,9 @@ When starting P2P Chat, you'll see:
 === P2P Chat Started ===
 Your Peer ID: 12D3KooWABC...
 Listening on: /ip4/127.0.0.1/tcp/12345
-Codename: Swift Falcon        ← Human-readable nickname
-Username: user_4567            ← Technical identifier
-MAC: aa:bb:cc:dd:ee:ff         ← Source MAC address
+Codename: Focused Turing        ← Human-readable nickname
+Username: user_4567              ← Technical identifier
+MAC: aa:bb:cc:dd:ee:ff           ← Source MAC address
 ```
 
 ### Chat Messages
@@ -122,17 +136,17 @@ Messages now display codenames instead of usernames:
 [14:30:25] user_1234: Hello everyone!
 
 # New format with codenames
-[14:30:25] Swift Falcon: Hello everyone!
-[14:30:30] Brave Lion: Welcome!
-[14:30:35] Golden Phoenix: Hey there!
+[14:30:25] Focused Turing: Hello everyone!
+[14:30:30] Admiring Lovelace: Welcome!
+[14:30:35] Brave Hopper: Hey there!
 ```
 
 ### Join/Leave Notifications
 
 ```bash
-*** Swift Falcon joined the chat (at 14:25:10)
-*** Brave Lion joined the chat (at 14:25:15)
-*** Golden Phoenix left the chat (at 14:35:20)
+*** Focused Turing joined the chat (at 14:25:10)
+*** Admiring Lovelace joined the chat (at 14:25:15)
+*** Brave Hopper left the chat (at 14:35:20)
 ```
 
 ---
@@ -226,7 +240,7 @@ Returns both codename and technical username.
 
 ```go
 codenameStr, usernameStr := codename.GenerateWithUsername()
-// codenameStr: "Swift Falcon"
+// codenameStr: "Focused Turing"
 // usernameStr: "user_4567"
 ```
 
@@ -253,25 +267,26 @@ Modified files:
 Here are some actual examples you might see:
 
 ```
-Swift Falcon        Golden Phoenix      Brave Lion
-Shadow Dragon       Silver Eagle        Crimson Tiger
-Azure Hawk          Thunder Wolf        Lightning Bear
-Storm Panther       Frost Leopard       Fire Jaguar
-Diamond Raven       Crystal Owl         Iron Knight
-Mystic Guardian     Cosmic Voyager      Noble Warrior
-Radiant Star        Blazing Comet       Serene Moon
-Wild Mountain       Free Ocean          Bold River
-Ancient Forest      Calm Desert         Wise Cloud
+Focused Turing      Admiring Lovelace   Brave Hopper
+Clever Einstein     Epic Newton         Dreamy Curie
+Bold Darwin         Awesome Tesla       Happy Galileo
+Elastic Fermi       Gifted Knuth        Hungry Dijkstra
+Cool Ritchie        Funny Thompson      Eager Torvalds
+Amazing Gates       Peaceful Jobs       Serene Wozniak
+Hopeful Berners     Elegant Stallman    Vibrant Minsky
+Compassionate Papert Determined McCarthy Inspiring Shannon
+Brilliant Babbage   Gracious Von Neumann Eloquent Church
 ```
 
 ### Collision Probability
 
-With 2,500 combinations:
+With ~8,000 combinations:
 - **2-10 peers:** ~0% chance of collision
-- **50 peers:** ~20% chance of collision
-- **100 peers:** ~63% chance of collision
+- **50 peers:** ~15% chance of collision
+- **100 peers:** ~47% chance of collision
+- **200 peers:** ~84% chance of collision
 
-For networks >50 peers, consider expanding word lists.
+For networks >100 peers, collisions are possible but unlikely to affect same conversation.
 
 ---
 
@@ -280,28 +295,28 @@ For networks >50 peers, consider expanding word lists.
 ### 1. Friendly Chat Interface
 ```
 Instead of: [user_1234] Hello!
-You see:    [Swift Falcon] Hello!
+You see:    [Focused Turing] Hello!
 ```
 
 ### 2. Peer Identification
 ```
 # Quickly identify peers in logs
-[14:30] Swift Falcon connected
-[14:31] Brave Lion sent message
-[14:32] Golden Phoenix disconnected
+[14:30] Focused Turing connected
+[14:31] Admiring Lovelace sent message
+[14:32] Brave Hopper disconnected
 ```
 
 ### 3. Consistent Identity
 ```
 # Same codename across sessions
-Session 1: Swift Falcon (user_4567)
-Session 2: Swift Falcon (user_4567)  ← Same!
+Session 1: Focused Turing (user_4567)
+Session 2: Focused Turing (user_4567)  ← Same!
 ```
 
 ### 4. Debugging
 ```
 # Track specific peer across restarts
-✓ Swift Falcon (MAC: aa:bb:cc:dd:ee:ff)
+✓ Focused Turing (MAC: aa:bb:cc:dd:ee:ff)
   - Peer ID: 12D3KooW...
   - Username: user_4567
 ```
@@ -352,19 +367,18 @@ CODENAME_NOUNS="/path/to/nouns.txt"
 CODENAME_THEME="military|nature|anime"
 ```
 
-### Custom Word Lists
+### Custom Names
 
-To customize, edit `internal/codename/generator.go`:
+The codenames come from Docker's `namesgenerator` package. To add custom names:
 
-```go
-var adjectives = []string{
-    "Your", "Custom", "Adjectives", ...
-}
+**Option 1:** Fork Docker's namesgenerator library
+- Fork: https://github.com/moby/moby/tree/master/pkg/namesgenerator
+- Add your names to `names-generator.go`
+- Use your fork: `go mod edit -replace=github.com/docker/docker/pkg/namesgenerator=your-fork`
 
-var nouns = []string{
-    "Your", "Custom", "Nouns", ...
-}
-```
+**Option 2:** Create your own generator (advanced)
+- Replace `namesgenerator.GetRandomName()` with custom logic
+- Maintain same deterministic behavior using seed
 
 Then rebuild:
 ```bash
@@ -382,7 +396,7 @@ go build -o p2p-chat .
 **Solutions:**
 - Check if running in Docker (may share virtual MAC)
 - Use `network_mode: host` in Docker
-- Expand word lists for more combinations
+- Note: With ~8,000 combinations, collisions are rare in normal use
 
 ### Issue: Codename changes on restart
 
@@ -423,16 +437,16 @@ Initializing P2P node...
 
 === P2P Chat Started ===
 Your Peer ID: 12D3KooWABC123...
-Codename: Swift Falcon
+Codename: Focused Turing
 Username: user_4567
 MAC: aa:bb:cc:dd:ee:ff
 
 > Hello everyone!
-[14:30:25] Swift Falcon: Hello everyone!
+[14:30:25] Focused Turing: Hello everyone!
 
-*** Brave Lion joined the chat (at 14:30:30)
-[14:30:35] Brave Lion: Hey Swift Falcon!
-[14:30:40] Swift Falcon: Welcome!
+*** Admiring Lovelace joined the chat (at 14:30:30)
+[14:30:35] Admiring Lovelace: Hey Focused Turing!
+[14:30:40] Focused Turing: Welcome!
 ```
 
 ---

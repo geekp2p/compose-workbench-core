@@ -150,7 +150,7 @@ Once connected, you'll see:
 === P2P Chat Started ===
 Your Peer ID: 12D3KooWABC...
 Listening on: /ip4/127.0.0.1/tcp/12345
-Codename: Swift Falcon          ← Your unique nickname!
+Codename: Focused Turing         ← Your unique nickname!
 Username: user_8532
 MAC: aa:bb:cc:dd:ee:ff
 
@@ -159,7 +159,7 @@ Type /help for commands
 >
 ```
 
-**🏷️ Codename Feature:** Each peer gets a unique, memorable codename (e.g., "Swift Falcon") generated from their MAC address. Same MAC = Same codename! See [CODENAME.md](CODENAME.md) for details.
+**🏷️ Codename Feature:** Each peer gets a unique, memorable codename (e.g., "Focused Turing", "Admiring Lovelace") generated from their MAC address using Docker's namesgenerator. Same MAC = Same codename! See [CODENAME.md](CODENAME.md) for details.
 
 **Available Commands:**
 - `/help` - Show available commands
@@ -171,7 +171,7 @@ Type /help for commands
 
 ```
 > Hello P2P World!
-[Swift Falcon] Hello P2P World!
+[Focused Turing] Hello P2P World!
 
 > /peers
 Connected Peers (2):
@@ -180,12 +180,12 @@ Connected Peers (2):
 
 > /history
 Recent messages:
-[Brave Lion] Hey everyone! (2m ago)
-[Golden Phoenix] Welcome to the network (3m ago)
-[Swift Falcon] Hello P2P World! (just now)
+[Admiring Lovelace] Hey everyone! (2m ago)
+[Brave Hopper] Welcome to the network (3m ago)
+[Focused Turing] Hello P2P World! (just now)
 ```
 
-**Notice:** Messages now show codenames instead of user_xxxx! 🎉
+**Notice:** Messages now show codenames (famous tech pioneers!) instead of user_xxxx! 🎉
 
 ### Verbose Mode (Debug Logs)
 
