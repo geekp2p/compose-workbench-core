@@ -17,7 +17,8 @@ A fully decentralized peer-to-peer chat application built with **Go** and **libp
 
 ### User Experience
 - **Interactive CLI**: Simple, colorful terminal interface
-- **Random Anonymous Usernames**: "user_1234" generated for each session
+- **🏷️ Unique Codenames**: Memorable nicknames like "Swift Falcon" (deterministic from MAC address)
+- **Technical Usernames**: "user_1234" for protocol compatibility
 - **Message History**: View last 10 messages when joining
 - **Peer Count**: See connected peer count in real-time
 - **Commands**: `/help`, `/peers`, `/history`, `/quit`
@@ -149,12 +150,16 @@ Once connected, you'll see:
 === P2P Chat Started ===
 Your Peer ID: 12D3KooWABC...
 Listening on: /ip4/127.0.0.1/tcp/12345
+Codename: Swift Falcon          ← Your unique nickname!
 Username: user_8532
+MAC: aa:bb:cc:dd:ee:ff
 
 Connected peers: 0
 Type /help for commands
 >
 ```
+
+**🏷️ Codename Feature:** Each peer gets a unique, memorable codename (e.g., "Swift Falcon") generated from their MAC address. Same MAC = Same codename! See [CODENAME.md](CODENAME.md) for details.
 
 **Available Commands:**
 - `/help` - Show available commands
@@ -164,11 +169,9 @@ Type /help for commands
 - `/quit` - Exit gracefully
 - Just type text to send messages!
 
-### Example Session
-
 ```
 > Hello P2P World!
-[user_8532] Hello P2P World!
+[Swift Falcon] Hello P2P World!
 
 > /peers
 Connected Peers (2):
@@ -177,10 +180,12 @@ Connected Peers (2):
 
 > /history
 Recent messages:
-[user_1234] Hey everyone! (2m ago)
-[user_5678] Welcome to the network (3m ago)
-[user_8532] Hello P2P World! (just now)
+[Brave Lion] Hey everyone! (2m ago)
+[Golden Phoenix] Welcome to the network (3m ago)
+[Swift Falcon] Hello P2P World! (just now)
 ```
+
+**Notice:** Messages now show codenames instead of user_xxxx! 🎉
 
 ### Verbose Mode (Debug Logs)
 

@@ -3,12 +3,12 @@ package cli
 import (
 	"bufio"
 	"fmt"
-	"math/rand"
 	"os"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/geekp2p/p2p-chat-go/internal/codename"
 	"github.com/geekp2p/p2p-chat-go/internal/messaging"
 	"github.com/geekp2p/p2p-chat-go/internal/storage"
 	"github.com/geekp2p/p2p-chat-go/internal/updater"
@@ -21,7 +21,8 @@ type ChatCLI struct {
 	host         host.Host
 	messaging    *messaging.P2PMessaging
 	store        *storage.MessageStore
-	username     string
+	codename     string      // Human-readable codename (e.g., "Swift Falcon")
+	username     string      // Technical username (e.g., "user_1234")
 	displayNames map[peer.ID]string
 	verboseMode  *bool       // Pointer to P2PNode's Verbose flag
 	router       interface{} // SmartRouter instance
@@ -31,11 +32,15 @@ type ChatCLI struct {
 
 // NewChatCLI creates a new CLI instance
 func NewChatCLI(h host.Host, msg *messaging.P2PMessaging, store *storage.MessageStore, verboseMode *bool) *ChatCLI {
+	// Generate deterministic codename and username from MAC address
+	codenameStr, usernameStr := codename.GenerateWithUsername()
+
 	return &ChatCLI{
 		host:         h,
 		messaging:    msg,
 		store:        store,
-		username:     generateUsername(),
+		codename:     codenameStr,
+		username:     usernameStr,
 		displayNames: make(map[peer.ID]string),
 		verboseMode:  verboseMode,
 		router:       nil, // Will be set via SetRouter()
@@ -59,12 +64,6 @@ func (c *ChatCLI) SetDHTStorage(storage interface{}) {
 	c.dhtStorage = storage
 }
 
-// generateUsername creates a random username
-func generateUsername() string {
-	rand.Seed(time.Now().UnixNano())
-	return fmt.Sprintf("user_%d", rand.Intn(10000))
-}
-
 // Start begins the interactive CLI session
 func (c *ChatCLI) Start() error {
 	// Display welcome message
@@ -73,8 +72,8 @@ func (c *ChatCLI) Start() error {
 	// Show recent message history
 	c.showHistory()
 
-	// Send join notification
-	if err := c.messaging.PublishMessage("join", fmt.Sprintf("%s joined the chat", c.username), c.username); err != nil {
+	// Send join notification (use codename for display)
+	if err := c.messaging.PublishMessage("join", fmt.Sprintf("%s joined the chat", c.codename), c.codename); err != nil {
 		return fmt.Errorf("failed to send join message: %w", err)
 	}
 
@@ -93,7 +92,9 @@ func (c *ChatCLI) printWelcome() {
 	fmt.Println("\n=== P2P Chat Started ===")
 	fmt.Printf("Your Peer ID: %s\n", c.host.ID())
 	fmt.Printf("Listening on: %s\n", c.host.Addrs()[0])
+	fmt.Printf("Codename: %s\n", c.codename)
 	fmt.Printf("Username: %s\n", c.username)
+	fmt.Printf("%s\n", codename.GetMACInfo())
 	fmt.Printf("\nNetwork peers: %d | Chat mesh peers: %d\n", len(networkPeers), len(meshPeers))
 	if len(meshPeers) == 0 {
 		fmt.Println("⚠ No peers in chat mesh yet - use /mesh to check status")
@@ -156,18 +157,18 @@ func (c *ChatCLI) inputLoop() error {
 		if strings.HasPrefix(input, "/") {
 			c.handleCommand(input)
 		} else {
-			// Send regular message
-			if err := c.messaging.PublishMessage("message", input, c.username); err != nil {
+			// Send regular message (use codename for display)
+			if err := c.messaging.PublishMessage("message", input, c.codename); err != nil {
 				fmt.Printf("Error sending message: %v\n", err)
 			} else {
-				// Display own message
-				fmt.Printf("[%s] %s: %s\n", storage.FormatTimestamp(time.Now().Unix()), c.username, input)
+				// Display own message with codename
+				fmt.Printf("[%s] %s: %s\n", storage.FormatTimestamp(time.Now().Unix()), c.codename, input)
 
-				// Save to store
+				// Save to store (keep codename for history)
 				msg := &storage.Message{
 					Type:      "message",
 					Content:   input,
-					Username:  c.username,
+					Username:  c.codename,
 					Timestamp: time.Now().Unix(),
 					From:      c.host.ID().String(),
 				}
