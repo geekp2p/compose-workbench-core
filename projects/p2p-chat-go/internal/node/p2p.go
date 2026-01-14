@@ -55,6 +55,9 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 		return nil, fmt.Errorf("failed to generate keypair: %w", err)
 	}
 
+	// Get static relay peers (will be populated after connecting to bootstrap)
+	staticRelays := getStaticRelayPeers()
+
 	// Create a new libp2p Host with enhanced NAT traversal capabilities
 	h, err := libp2p.New(
 		libp2p.Identity(priv),
@@ -65,11 +68,9 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 		),
 		// Enable NAT traversal features
 		libp2p.NATPortMap(),       // UPnP and NAT-PMP port mapping
-		libp2p.EnableNATService(), // Help other peers detect their NAT status
-		libp2p.EnableAutoRelayWithStaticRelays( // Enable circuit relay v2 client
-			[]peer.AddrInfo{},
-		),
-		libp2p.EnableHolePunching(), // Enable hole punching
+		libp2p.EnableNATService(), // Help other peers detect their NAT status (includes AutoNAT)
+		libp2p.EnableAutoRelayWithStaticRelays(staticRelays), // Enable circuit relay v2 client with static relays
+		libp2p.EnableHolePunching(), // Enable DCUtR hole punching
 		libp2p.EnableRelay(),        // Allow being relayed through other peers
 	)
 	if err != nil {
@@ -114,6 +115,9 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 		fmt.Printf("Warning: failed to connect to relay servers: %v\n", err)
 	}
 
+	// Start monitoring AutoNAT status (show NAT type detection)
+	go monitorNATStatus(ctx, h, verbose)
+
 	// Create a P2PNode instance to pass verbose flag to connection handlers
 	node := &P2PNode{
 		Host:    h,
@@ -139,17 +143,20 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 
 	// Create a new PubSub service using GossipSub with optimized configuration
 	// These parameters are tuned for reliable mesh formation and message delivery
+	// especially for peers behind NAT/firewalls
 	// Start with default params to avoid divide-by-zero errors from missing fields
 	gossipParams := pubsub.DefaultGossipSubParams()
-	// Override specific parameters for smaller networks
-	gossipParams.D = 3                      // Desired mesh size (reduced from default 6 for smaller networks)
-	gossipParams.Dlo = 2                    // Lower bound (reduced from default 4)
-	gossipParams.Dhi = 5                    // Upper bound (reduced from default 12)
-	gossipParams.Dlazy = 3                  // Lazy propagation factor
-	gossipParams.HeartbeatInterval = 1 * time.Second // More frequent heartbeats for faster mesh formation
-	gossipParams.FanoutTTL = 60 * time.Second
+	// Override specific parameters for better NAT traversal and smaller networks
+	gossipParams.D = 4                      // Desired mesh size (slightly higher for reliability)
+	gossipParams.Dlo = 3                    // Lower bound (maintain more connections)
+	gossipParams.Dhi = 6                    // Upper bound (allow more peers)
+	gossipParams.Dlazy = 4                  // Lazy propagation factor (more backup routes)
+	gossipParams.HeartbeatInterval = 700 * time.Millisecond // More frequent heartbeats for faster mesh formation
+	gossipParams.FanoutTTL = 90 * time.Second // Longer fanout TTL for unreliable connections
 	gossipParams.GossipFactor = 0.25
 	gossipParams.GossipRetransmission = 3
+	gossipParams.HistoryLength = 6          // Keep more history for message recovery
+	gossipParams.HistoryGossip = 3          // Gossip more history
 
 	ps, err := pubsub.NewGossipSub(ctx, h,
 		// Enable message signing for security
@@ -180,6 +187,34 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 	node.Relay = relayService
 
 	return node, nil
+}
+
+// getStaticRelayPeers returns a list of reliable relay peers
+func getStaticRelayPeers() []peer.AddrInfo {
+	// List of reliable public relay servers
+	relayAddrs := []string{
+		// libp2p public relays (updated addresses)
+		"/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+		"/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+		// Additional circuit relay v2 servers
+		"/ip4/147.75.83.83/tcp/4001/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+		"/ip4/147.75.77.187/tcp/4001/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+	}
+
+	var staticRelays []peer.AddrInfo
+	for _, addrStr := range relayAddrs {
+		addr, err := multiaddr.NewMultiaddr(addrStr)
+		if err != nil {
+			continue
+		}
+		peerInfo, err := peer.AddrInfoFromP2pAddr(addr)
+		if err != nil {
+			continue
+		}
+		staticRelays = append(staticRelays, *peerInfo)
+	}
+
+	return staticRelays
 }
 
 // connectToBootstrapPeers connects to well-known bootstrap peers
@@ -225,12 +260,17 @@ func connectToBootstrapPeers(ctx context.Context, h host.Host, verbose bool) err
 
 // connectToRelayServers connects to public relay servers for NAT traversal
 func connectToRelayServers(ctx context.Context, h host.Host, verbose bool) error {
-	// Public relay servers (libp2p community relays)
+	// Public relay servers (multiple sources for better reliability)
 	relayServers := []string{
 		// Official libp2p relay servers
 		"/ip4/147.75.83.83/tcp/4001/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
 		"/ip4/147.75.77.187/tcp/4001/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
-		// Add more public relays as available
+		// DNS-based addresses for automatic failover
+		"/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+		"/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+		"/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
+		// Additional bootstrap nodes that support relay
+		"/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
 	}
 
 	connected := 0
@@ -312,19 +352,36 @@ func (n *P2PNode) DiscoverPeers(ctx context.Context, namespace string) error {
 		}
 	}()
 
-	// Continuously find peers (restart discovery every 30 seconds)
+	// Continuously find peers (more aggressive discovery for better connectivity)
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
+		// More frequent discovery in the first 5 minutes for faster mesh formation
+		initialTicker := time.NewTicker(10 * time.Second)
+		normalTicker := time.NewTicker(30 * time.Second)
+		defer initialTicker.Stop()
+		defer normalTicker.Stop()
 
 		// Initial discovery
 		n.startPeerDiscovery(ctx, routingDiscovery, namespace)
 
-		// Periodic re-discovery
+		// Aggressive discovery for first 5 minutes
+		initialPhase := time.After(5 * time.Minute)
 		for {
 			select {
-			case <-ticker.C:
-				n.startPeerDiscovery(ctx, routingDiscovery, namespace)
+			case <-initialTicker.C:
+				select {
+				case <-initialPhase:
+					// Switch to normal discovery rate
+					initialTicker.Stop()
+				default:
+					n.startPeerDiscovery(ctx, routingDiscovery, namespace)
+				}
+			case <-normalTicker.C:
+				// Normal discovery rate after initial phase
+				select {
+				case <-initialPhase:
+					n.startPeerDiscovery(ctx, routingDiscovery, namespace)
+				default:
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -380,6 +437,34 @@ func (n *P2PNode) startPeerDiscovery(ctx context.Context, routingDiscovery *drou
 			fmt.Printf("Discovery round complete: found %d peers, connected to %d new peers\n", discoveredCount, connectedCount)
 		}
 	}()
+}
+
+// monitorNATStatus monitors and reports NAT reachability status
+func monitorNATStatus(ctx context.Context, h host.Host, verbose bool) {
+	// Wait a bit for AutoNAT to detect NAT status
+	time.Sleep(5 * time.Second)
+
+	// Check reachability status
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Get observed addresses (how other peers see us)
+			observedAddrs := h.Addrs()
+			if verbose {
+				fmt.Printf("\n=== NAT Status ===\n")
+				fmt.Printf("Local addresses: %d\n", len(observedAddrs))
+				for _, addr := range observedAddrs {
+					fmt.Printf("  - %s\n", addr)
+				}
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // setupMDNS initializes mDNS discovery for local network peers
