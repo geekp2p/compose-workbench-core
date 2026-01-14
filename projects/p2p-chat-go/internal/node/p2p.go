@@ -21,11 +21,13 @@ import (
 
 // P2PNode represents a libp2p node with P2P capabilities
 type P2PNode struct {
-	Host    host.Host
-	DHT     *dht.IpfsDHT
-	PubSub  *pubsub.PubSub
-	Relay   *relay.Relay
-	Verbose bool // Enable verbose logging for debugging
+	Host         host.Host
+	DHT          *dht.IpfsDHT
+	PubSub       *pubsub.PubSub
+	Relay        *relay.Relay
+	RelayService interface{} // Will be set to *relayservice.RelayService
+	Router       interface{} // Will be set to *routing.SmartRouter
+	Verbose      bool        // Enable verbose logging for debugging
 }
 
 // discoveryNotifee implements mdns.Notifee for local peer discovery

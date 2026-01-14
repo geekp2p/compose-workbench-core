@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/geekp2p/p2p-chat-go/internal/cli"
+	dhtstorage "github.com/geekp2p/p2p-chat-go/internal/dht"
 	"github.com/geekp2p/p2p-chat-go/internal/messaging"
 	"github.com/geekp2p/p2p-chat-go/internal/node"
+	relayservice "github.com/geekp2p/p2p-chat-go/internal/relay"
+	"github.com/geekp2p/p2p-chat-go/internal/routing"
 	"github.com/geekp2p/p2p-chat-go/internal/storage"
 	"github.com/geekp2p/p2p-chat-go/internal/updater"
 )
@@ -64,6 +67,28 @@ func main() {
 	}
 	defer p2pNode.Close()
 
+	// Initialize smart routing
+	fmt.Println("Initializing smart routing...")
+	router := routing.NewSmartRouter(ctx, p2pNode.Host, p2pNode.Verbose)
+	p2pNode.Router = router
+
+	// Initialize relay service
+	fmt.Println("Checking for public IP and relay capabilities...")
+	relaySvc := relayservice.NewRelayService(ctx, p2pNode.Host, p2pNode.Verbose)
+	p2pNode.RelayService = relaySvc
+
+	// Try to enable relay service if we have public IP
+	if relaySvc.IsPublic() {
+		if err := relaySvc.EnableRelayService(); err != nil {
+			fmt.Printf("Note: Could not enable relay service: %v\n", err)
+		}
+	}
+
+	// Initialize distributed storage
+	fmt.Println("Initializing distributed storage (DHT-based)...")
+	dhtStorage := dhtstorage.NewDistributedStorage(ctx, p2pNode.Host, p2pNode.DHT, p2pNode.Verbose)
+	defer dhtStorage.Close()
+
 	// Initialize message store
 	fmt.Printf("Initializing message store at: %s\n", dataDir)
 	store, err := storage.NewMessageStore(dataDir)
@@ -97,6 +122,12 @@ func main() {
 
 	// Start CLI (pass verbose flag pointer so it can be toggled)
 	chatCLI := cli.NewChatCLI(p2pNode.Host, msg, store, &p2pNode.Verbose)
+
+	// Set additional services for CLI commands
+	chatCLI.SetRouter(router)
+	chatCLI.SetRelayService(relaySvc)
+	chatCLI.SetDHTStorage(dhtStorage)
+
 	if err := chatCLI.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "CLI error: %v\n", err)
 		os.Exit(1)
