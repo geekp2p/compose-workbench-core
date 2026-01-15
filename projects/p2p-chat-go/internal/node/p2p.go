@@ -2,14 +2,15 @@ package node
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"time"
+
+	"github.com/geekp2p/p2p-chat-go/internal/identity"
+	"github.com/geekp2p/p2p-chat-go/internal/peers"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -25,9 +26,10 @@ type P2PNode struct {
 	DHT          *dht.IpfsDHT
 	PubSub       *pubsub.PubSub
 	Relay        *relay.Relay
-	RelayService interface{} // Will be set to *relayservice.RelayService
-	Router       interface{} // Will be set to *routing.SmartRouter
-	Verbose      bool        // Enable verbose logging for debugging
+	RelayService interface{}      // Will be set to *relayservice.RelayService
+	Router       interface{}      // Will be set to *routing.SmartRouter
+	PeerManager  *peers.PeerManager // Manages peer lifecycle and reconnection
+	Verbose      bool              // Enable verbose logging for debugging
 }
 
 // discoveryNotifee implements mdns.Notifee for local peer discovery
@@ -51,10 +53,10 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 
 // NewP2PNode creates a new P2P node with DHT and PubSub
 func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
-	// Generate a new keypair for this host
-	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, 2048, rand.Reader)
+	// Load or create persistent identity (ensures consistent peer ID across restarts)
+	priv, err := identity.GetOrCreateIdentity("./data")
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate keypair: %w", err)
+		return nil, fmt.Errorf("failed to get/create identity: %w", err)
 	}
 
 	// Get static relay peers (will be populated after connecting to bootstrap)
@@ -469,6 +471,23 @@ func monitorNATStatus(ctx context.Context, h host.Host, verbose bool) {
 	}
 }
 
+// InitializePeerManager initializes the peer manager for automatic discovery and reconnection
+// This should be called after the node is created and DHT is bootstrapped
+func (n *P2PNode) InitializePeerManager(ctx context.Context, topic string) {
+	// Create routing discovery
+	routingDiscovery := drouting.NewRoutingDiscovery(n.DHT)
+
+	// Create peer manager with configuration
+	config := peers.DefaultConfig(topic)
+	config.Verbose = n.Verbose
+
+	n.PeerManager = peers.NewPeerManager(ctx, n.Host, routingDiscovery, config)
+
+	if n.Verbose {
+		fmt.Println("✓ Peer manager initialized with auto-reconnect and keep-alive")
+	}
+}
+
 // setupMDNS initializes mDNS discovery for local network peers
 func setupMDNS(h host.Host, verbose bool) error {
 	// Create a new mDNS service with custom service name
@@ -488,6 +507,11 @@ func setupMDNS(h host.Host, verbose bool) error {
 
 // Close shuts down the P2P node
 func (n *P2PNode) Close() error {
+	// Close peer manager first to stop background tasks
+	if n.PeerManager != nil {
+		n.PeerManager.Close()
+	}
+
 	if n.Relay != nil {
 		if err := n.Relay.Close(); err != nil {
 			fmt.Printf("Warning: failed to close relay: %v\n", err)
