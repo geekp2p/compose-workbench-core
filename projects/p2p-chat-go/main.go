@@ -107,11 +107,9 @@ func main() {
 	}
 	defer msg.Close()
 
-	// Start peer discovery
-	fmt.Println("Starting peer discovery...")
-	if err := p2pNode.DiscoverPeers(ctx, chatTopic); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: peer discovery failed: %v\n", err)
-	}
+	// Initialize peer manager for automatic discovery and reconnection
+	fmt.Println("Starting peer discovery with auto-reconnect...")
+	p2pNode.InitializePeerManager(ctx, chatTopic)
 
 	// Wait for peers to connect and mesh to stabilize
 	fmt.Println("Waiting for GossipSub mesh to form...")
