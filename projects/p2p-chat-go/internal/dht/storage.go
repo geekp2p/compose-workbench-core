@@ -79,15 +79,24 @@ func (ds *DistributedStorage) PutMessage(msg *StorageMessage) error {
 	// Store in local cache first
 	ds.cache[contentID] = msg
 
-	// Announce to the network that we have this content
-	// This uses DHT provider records - other peers can find us
-	if err := ds.dht.Provide(ds.ctx, contentID, true); err != nil {
+	// Convert contentID string to cid.Cid for DHT operations
+	c, err := cid.Decode(contentID)
+	if err != nil {
 		if ds.verbose {
-			fmt.Printf("Warning: Failed to provide content to DHT: %v\n", err)
+			fmt.Printf("Warning: Failed to decode content ID: %v\n", err)
 		}
-		// Don't return error - local storage succeeded
-	} else if ds.verbose {
-		fmt.Printf("✓ Announced message to DHT network (CID: %s)\n", contentID[:12]+"...")
+		// Continue - local storage succeeded
+	} else {
+		// Announce to the network that we have this content
+		// This uses DHT provider records - other peers can find us
+		if err := ds.dht.Provide(ds.ctx, c, true); err != nil {
+			if ds.verbose {
+				fmt.Printf("Warning: Failed to provide content to DHT: %v\n", err)
+			}
+			// Don't return error - local storage succeeded
+		} else if ds.verbose {
+			fmt.Printf("✓ Announced message to DHT network (CID: %s)\n", contentID[:12]+"...")
+		}
 	}
 
 	// Store the actual data in DHT (optional - for redundancy)
