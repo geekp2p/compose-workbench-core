@@ -15,7 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -278,39 +277,124 @@ func connectToRelayServers(ctx context.Context, h host.Host, verbose bool) error
 
 // DiscoverPeers uses DHT to discover peers advertising the given namespace
 func (n *P2PNode) DiscoverPeers(ctx context.Context, namespace string) error {
-	// Advertise our presence
 	routingDiscovery := drouting.NewRoutingDiscovery(n.DHT)
-	dutil.Advertise(ctx, routingDiscovery, namespace)
-	fmt.Printf("Advertising ourselves with namespace: %s\n", namespace)
 
-	// Find other peers
-	peerChan, err := routingDiscovery.FindPeers(ctx, namespace)
-	if err != nil {
-		return fmt.Errorf("failed to find peers: %w", err)
-	}
-
-	// Connect to discovered peers
+	// Continuously advertise our presence (re-advertise every 5 minutes)
 	go func() {
-		for peer := range peerChan {
-			if peer.ID == n.Host.ID() {
-				continue // Skip ourselves
-			}
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
 
-			if n.Host.Network().Connectedness(peer.ID) != 1 {
-				if err := n.Host.Connect(ctx, peer); err != nil {
+		// Initial advertisement
+		ttl, err := routingDiscovery.Advertise(ctx, namespace)
+		if err != nil {
+			fmt.Printf("Failed to advertise: %v\n", err)
+		} else {
+			fmt.Printf("Advertising ourselves with namespace: %s (TTL: %v)\n", namespace, ttl)
+		}
+
+		// Re-advertise periodically
+		for {
+			select {
+			case <-ticker.C:
+				ttl, err := routingDiscovery.Advertise(ctx, namespace)
+				if err != nil {
 					if n.Verbose {
-						fmt.Printf("Failed to connect to peer %s: %v\n", peer.ID, err)
+						fmt.Printf("Re-advertisement failed: %v\n", err)
 					}
-				} else {
-					if n.Verbose {
-						fmt.Printf("Connected to peer: %s\n", peer.ID)
-					}
+				} else if n.Verbose {
+					fmt.Printf("Re-advertised with TTL: %v\n", ttl)
 				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Continuously find peers (more aggressive discovery for better connectivity)
+	go func() {
+		// More frequent discovery in the first 5 minutes for faster mesh formation
+		initialTicker := time.NewTicker(10 * time.Second)
+		normalTicker := time.NewTicker(30 * time.Second)
+		defer initialTicker.Stop()
+		defer normalTicker.Stop()
+
+		// Initial discovery
+		n.startPeerDiscovery(ctx, routingDiscovery, namespace)
+
+		// Aggressive discovery for first 5 minutes
+		initialPhase := time.After(5 * time.Minute)
+		for {
+			select {
+			case <-initialTicker.C:
+				select {
+				case <-initialPhase:
+					// Switch to normal discovery rate
+					initialTicker.Stop()
+				default:
+					n.startPeerDiscovery(ctx, routingDiscovery, namespace)
+				}
+			case <-normalTicker.C:
+				// Normal discovery rate after initial phase
+				select {
+				case <-initialPhase:
+					n.startPeerDiscovery(ctx, routingDiscovery, namespace)
+				default:
+				}
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
 
 	return nil
+}
+
+// startPeerDiscovery starts a new peer discovery query
+func (n *P2PNode) startPeerDiscovery(ctx context.Context, routingDiscovery *drouting.RoutingDiscovery, namespace string) {
+	peerChan, err := routingDiscovery.FindPeers(ctx, namespace)
+	if err != nil {
+		if n.Verbose {
+			fmt.Printf("Peer discovery query failed: %v\n", err)
+		}
+		return
+	}
+
+	// Connect to discovered peers
+	go func() {
+		discoveredCount := 0
+		connectedCount := 0
+
+		for peer := range peerChan {
+			if peer.ID == n.Host.ID() {
+				continue // Skip ourselves
+			}
+
+			discoveredCount++
+
+			// Check if already connected
+			connectedness := n.Host.Network().Connectedness(peer.ID)
+			if connectedness == network.Connected {
+				if n.Verbose {
+					fmt.Printf("Already connected to: %s\n", peer.ID.ShortString())
+				}
+				continue
+			}
+
+			// Try to connect
+			if err := n.Host.Connect(ctx, peer); err != nil {
+				if n.Verbose {
+					fmt.Printf("Failed to connect to discovered peer %s: %v\n", peer.ID.ShortString(), err)
+				}
+			} else {
+				connectedCount++
+				fmt.Printf("✓ Connected to chat peer: %s\n", peer.ID.ShortString())
+			}
+		}
+
+		if n.Verbose && discoveredCount > 0 {
+			fmt.Printf("Discovery round complete: found %d peers, connected to %d new peers\n", discoveredCount, connectedCount)
+		}
+	}()
 }
 
 // setupMDNS initializes mDNS discovery for local network peers
