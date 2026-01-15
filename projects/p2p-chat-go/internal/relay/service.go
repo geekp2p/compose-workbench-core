@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	ma "github.com/multiformats/go-multiaddr"
@@ -107,11 +106,6 @@ func (rs *RelayService) EnableRelayService() error {
 	// Create relay service with resource limits
 	relayOpts := []relay.Option{
 		relay.WithResources(relay.Resources{
-			Limit: &relay.ResourceLimit{
-				Duration: 2 * time.Minute,
-				Data:     1 << 20, // 1 MB per relay
-			},
-			ReservationTTL: 1 * time.Hour,
 			MaxReservations: 512,
 			MaxCircuits:     128,
 			BufferSize:      4096,
