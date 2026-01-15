@@ -22,11 +22,12 @@ import (
 
 // P2PNode represents a libp2p node with P2P capabilities
 type P2PNode struct {
-	Host    host.Host
-	DHT     *dht.IpfsDHT
-	PubSub  *pubsub.PubSub
-	Relay   *relay.Relay
-	Verbose bool // Enable verbose logging for debugging
+	Host        host.Host
+	DHT         *dht.IpfsDHT
+	PubSub      *pubsub.PubSub
+	Relay       *relay.Relay
+	PeerManager *PeerManager // Manages peer lifecycle and reconnection
+	Verbose     bool         // Enable verbose logging for debugging
 }
 
 // discoveryNotifee implements mdns.Notifee for local peer discovery
@@ -117,26 +118,13 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 
 	// Create a P2PNode instance to pass verbose flag to connection handlers
 	node := &P2PNode{
-		Host:    h,
-		DHT:     nil, // Will be set later
-		PubSub:  nil, // Will be set later
-		Relay:   nil, // Will be set later
-		Verbose: verbose,
+		Host:        h,
+		DHT:         nil, // Will be set later
+		PubSub:      nil, // Will be set later
+		Relay:       nil, // Will be set later
+		PeerManager: nil, // Will be set later
+		Verbose:     verbose,
 	}
-
-	// Set up connection notifications (only show in verbose mode)
-	h.Network().Notify(&network.NotifyBundle{
-		ConnectedF: func(n network.Network, conn network.Conn) {
-			if node.Verbose {
-				fmt.Printf("✓ Connection established: %s\n", conn.RemotePeer().ShortString())
-			}
-		},
-		DisconnectedF: func(n network.Network, conn network.Conn) {
-			if node.Verbose {
-				fmt.Printf("✗ Connection lost: %s\n", conn.RemotePeer().ShortString())
-			}
-		},
-	})
 
 	// Create a new PubSub service using GossipSub with optimized configuration
 	// These parameters are tuned for reliable mesh formation and message delivery
@@ -179,6 +167,23 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 	node.Relay = relayService
 
 	return node, nil
+}
+
+// InitializePeerManager initializes the peer manager with the given topic
+// This should be called after the node is created and before starting discovery
+func (n *P2PNode) InitializePeerManager(ctx context.Context, topic string) {
+	// Create routing discovery
+	routingDiscovery := drouting.NewRoutingDiscovery(n.DHT)
+
+	// Create peer manager with default configuration
+	config := DefaultPeerManagerConfig(topic)
+	config.Verbose = n.Verbose
+
+	n.PeerManager = NewPeerManager(ctx, n.Host, routingDiscovery, config)
+
+	if n.Verbose {
+		fmt.Println("✓ Peer manager initialized with auto-reconnect and keep-alive")
+	}
 }
 
 // connectToBootstrapPeers connects to well-known bootstrap peers
@@ -276,43 +281,6 @@ func connectToRelayServers(ctx context.Context, h host.Host, verbose bool) error
 	return nil
 }
 
-// DiscoverPeers uses DHT to discover peers advertising the given namespace
-func (n *P2PNode) DiscoverPeers(ctx context.Context, namespace string) error {
-	// Advertise our presence
-	routingDiscovery := drouting.NewRoutingDiscovery(n.DHT)
-	dutil.Advertise(ctx, routingDiscovery, namespace)
-	fmt.Printf("Advertising ourselves with namespace: %s\n", namespace)
-
-	// Find other peers
-	peerChan, err := routingDiscovery.FindPeers(ctx, namespace)
-	if err != nil {
-		return fmt.Errorf("failed to find peers: %w", err)
-	}
-
-	// Connect to discovered peers
-	go func() {
-		for peer := range peerChan {
-			if peer.ID == n.Host.ID() {
-				continue // Skip ourselves
-			}
-
-			if n.Host.Network().Connectedness(peer.ID) != 1 {
-				if err := n.Host.Connect(ctx, peer); err != nil {
-					if n.Verbose {
-						fmt.Printf("Failed to connect to peer %s: %v\n", peer.ID, err)
-					}
-				} else {
-					if n.Verbose {
-						fmt.Printf("Connected to peer: %s\n", peer.ID)
-					}
-				}
-			}
-		}
-	}()
-
-	return nil
-}
-
 // setupMDNS initializes mDNS discovery for local network peers
 func setupMDNS(h host.Host, verbose bool) error {
 	// Create a new mDNS service
@@ -326,6 +294,11 @@ func setupMDNS(h host.Host, verbose bool) error {
 
 // Close shuts down the P2P node
 func (n *P2PNode) Close() error {
+	// Close peer manager first to stop background tasks
+	if n.PeerManager != nil {
+		n.PeerManager.Close()
+	}
+
 	if n.Relay != nil {
 		if err := n.Relay.Close(); err != nil {
 			fmt.Printf("Warning: failed to close relay: %v\n", err)
