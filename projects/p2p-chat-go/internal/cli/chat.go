@@ -182,6 +182,8 @@ func (c *ChatCLI) handleCommand(cmd string) {
 		c.showMeshPeers()
 	case "/history":
 		c.showHistory()
+	case "/clear":
+		c.clearMessages(parts)
 	case "/verbose":
 		c.toggleVerbose()
 	case "/version":
@@ -199,14 +201,16 @@ func (c *ChatCLI) handleCommand(cmd string) {
 // showHelp displays available commands
 func (c *ChatCLI) showHelp() {
 	fmt.Println("\nAvailable Commands:")
-	fmt.Println("  /help     - Show this help message")
-	fmt.Println("  /peers    - List all connected network peers")
-	fmt.Println("  /mesh     - List peers in the chat topic mesh (actual chat participants)")
-	fmt.Println("  /history  - Show recent message history")
-	fmt.Println("  /verbose  - Toggle verbose mode (show connection logs)")
-	fmt.Println("  /version  - Show version information")
-	fmt.Println("  /update   - Check for updates and update binary")
-	fmt.Println("  /quit     - Exit the chat")
+	fmt.Println("  /help       - Show this help message")
+	fmt.Println("  /peers      - List all connected network peers")
+	fmt.Println("  /mesh       - List peers in the chat topic mesh (actual chat participants)")
+	fmt.Println("  /history    - Show recent message history")
+	fmt.Println("  /clear      - Clear all messages from local database")
+	fmt.Println("  /clear <N>  - Clear messages older than N days")
+	fmt.Println("  /verbose    - Toggle verbose mode (show connection logs)")
+	fmt.Println("  /version    - Show version information")
+	fmt.Println("  /update     - Check for updates and update binary")
+	fmt.Println("  /quit       - Exit the chat")
 	fmt.Println()
 }
 
@@ -369,4 +373,88 @@ func (c *ChatCLI) performUpdate() {
 	}
 
 	fmt.Println()
+}
+
+// clearMessages clears messages from local database
+func (c *ChatCLI) clearMessages(parts []string) {
+	// Get current message count
+	count, err := c.store.GetMessageCount()
+	if err != nil {
+		fmt.Printf("Error getting message count: %v\n", err)
+		return
+	}
+
+	if count == 0 {
+		fmt.Println("\nNo messages to clear.\n")
+		return
+	}
+
+	// Check if user wants to clear by days
+	if len(parts) > 1 {
+		// Parse days
+		var days int
+		_, err := fmt.Sscanf(parts[1], "%d", &days)
+		if err != nil {
+			fmt.Printf("Invalid number of days: %s\n", parts[1])
+			fmt.Println("Usage: /clear <days>")
+			fmt.Println("Example: /clear 7  (clears messages older than 7 days)\n")
+			return
+		}
+
+		if days <= 0 {
+			fmt.Println("Number of days must be greater than 0\n")
+			return
+		}
+
+		// Show confirmation
+		fmt.Printf("\n⚠️  This will delete messages older than %d days from your local database.\n", days)
+		fmt.Printf("Current message count: %d\n", count)
+		fmt.Print("Are you sure? (y/N): ")
+
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+
+		if response != "y" && response != "yes" {
+			fmt.Println("Cancelled.\n")
+			return
+		}
+
+		// Clear old messages
+		deleted, err := c.store.ClearOldMessages(days)
+		if err != nil {
+			fmt.Printf("Error clearing old messages: %v\n\n", err)
+			return
+		}
+
+		if deleted == 0 {
+			fmt.Printf("✓ No messages older than %d days found.\n\n", days)
+		} else {
+			fmt.Printf("✓ Deleted %d message(s) older than %d days.\n", deleted, days)
+			fmt.Printf("Remaining messages: %d\n\n", count-deleted)
+		}
+	} else {
+		// Clear all messages
+		fmt.Printf("\n⚠️  This will delete ALL %d message(s) from your local database.\n", count)
+		fmt.Println("This action cannot be undone!")
+		fmt.Print("Are you sure? (y/N): ")
+
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+
+		if response != "y" && response != "yes" {
+			fmt.Println("Cancelled.\n")
+			return
+		}
+
+		// Clear all messages
+		deleted, err := c.store.ClearAllMessages()
+		if err != nil {
+			fmt.Printf("Error clearing messages: %v\n\n", err)
+			return
+		}
+
+		fmt.Printf("✓ Successfully deleted %d message(s).\n\n", deleted)
+	}
 }
