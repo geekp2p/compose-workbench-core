@@ -2,31 +2,32 @@ package node
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"time"
+
+	"github.com/geekp2p/p2p-chat-go/internal/identity"
+	"github.com/geekp2p/p2p-chat-go/internal/peers"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/multiformats/go-multiaddr"
 )
 
 // P2PNode represents a libp2p node with P2P capabilities
 type P2PNode struct {
-	Host    host.Host
-	DHT     *dht.IpfsDHT
-	PubSub  *pubsub.PubSub
-	Relay   *relay.Relay
-	Verbose bool // Enable verbose logging for debugging
+	Host        host.Host
+	DHT         *dht.IpfsDHT
+	PubSub      *pubsub.PubSub
+	Relay       *relay.Relay
+	PeerManager *peers.PeerManager // Manages peer lifecycle and reconnection
+	Verbose     bool               // Enable verbose logging for debugging
 }
 
 // discoveryNotifee implements mdns.Notifee for local peer discovery
@@ -50,10 +51,10 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 
 // NewP2PNode creates a new P2P node with DHT and PubSub
 func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
-	// Generate a new keypair for this host
-	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, 2048, rand.Reader)
+	// Load or create persistent identity (ensures consistent peer ID across restarts)
+	priv, err := identity.GetOrCreateIdentity("./data")
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate keypair: %w", err)
+		return nil, fmt.Errorf("failed to get/create identity: %w", err)
 	}
 
 	// Create a new libp2p Host with enhanced NAT traversal capabilities
@@ -140,6 +141,21 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 
 	// Create a new PubSub service using GossipSub with optimized configuration
 	// These parameters are tuned for reliable mesh formation and message delivery
+	// especially for peers behind NAT/firewalls
+	// Start with default params to avoid divide-by-zero errors from missing fields
+	gossipParams := pubsub.DefaultGossipSubParams()
+	// Override specific parameters for better NAT traversal and smaller networks
+	gossipParams.D = 4                                    // Desired mesh size (slightly higher for reliability)
+	gossipParams.Dlo = 3                                  // Lower bound (maintain more connections)
+	gossipParams.Dhi = 6                                  // Upper bound (allow more peers)
+	gossipParams.Dlazy = 4                                // Lazy propagation factor (more backup routes)
+	gossipParams.HeartbeatInterval = 700 * time.Millisecond // More frequent heartbeats for faster mesh formation
+	gossipParams.FanoutTTL = 90 * time.Second             // Longer fanout TTL for unreliable connections
+	gossipParams.GossipFactor = 0.25
+	gossipParams.GossipRetransmission = 3
+	gossipParams.HistoryLength = 6 // Keep more history for message recovery
+	gossipParams.HistoryGossip = 3 // Gossip more history
+
 	ps, err := pubsub.NewGossipSub(ctx, h,
 		// Enable message signing for security
 		pubsub.WithMessageSigning(true),
@@ -149,18 +165,8 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 		pubsub.WithPeerExchange(true),
 		// Set flood publishing to ensure message delivery even with small mesh
 		pubsub.WithFloodPublish(true),
-		// Set lower D parameters for small networks (default D=6 may be too high)
-		// D is the desired number of peers in the mesh
-		pubsub.WithGossipSubParams(pubsub.GossipSubParams{
-			D:                    3,               // Desired mesh size (reduced from default 6 for smaller networks)
-			Dlo:                  2,               // Lower bound (reduced from default 4)
-			Dhi:                  5,               // Upper bound (reduced from default 12)
-			Dlazy:                3,               // Lazy propagation factor
-			HeartbeatInterval:    1 * time.Second, // More frequent heartbeats for faster mesh formation
-			FanoutTTL:            60 * time.Second,
-			GossipFactor:         0.25,
-			GossipRetransmission: 3,
-		}),
+		// Apply our customized gossipsub parameters
+		pubsub.WithGossipSubParams(gossipParams),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pubsub: %w", err)
@@ -177,8 +183,26 @@ func NewP2PNode(ctx context.Context, verbose bool) (*P2PNode, error) {
 	node.DHT = kadDHT
 	node.PubSub = ps
 	node.Relay = relayService
+	// PeerManager will be set later by calling StartPeerManager
 
 	return node, nil
+}
+
+// StartPeerManager initializes and starts the peer manager with auto-reconnect
+func (n *P2PNode) StartPeerManager(ctx context.Context, topic string) error {
+	fmt.Println("Starting peer discovery with auto-reconnect...")
+
+	// Create routing discovery
+	routingDiscovery := drouting.NewRoutingDiscovery(n.DHT)
+
+	// Configure peer manager
+	config := peers.DefaultConfig(topic)
+	config.Verbose = n.Verbose
+
+	// Create and start peer manager
+	n.PeerManager = peers.NewPeerManager(ctx, n.Host, routingDiscovery, config)
+
+	return nil
 }
 
 // connectToBootstrapPeers connects to well-known bootstrap peers
@@ -276,42 +300,6 @@ func connectToRelayServers(ctx context.Context, h host.Host, verbose bool) error
 	return nil
 }
 
-// DiscoverPeers uses DHT to discover peers advertising the given namespace
-func (n *P2PNode) DiscoverPeers(ctx context.Context, namespace string) error {
-	// Advertise our presence
-	routingDiscovery := drouting.NewRoutingDiscovery(n.DHT)
-	dutil.Advertise(ctx, routingDiscovery, namespace)
-	fmt.Printf("Advertising ourselves with namespace: %s\n", namespace)
-
-	// Find other peers
-	peerChan, err := routingDiscovery.FindPeers(ctx, namespace)
-	if err != nil {
-		return fmt.Errorf("failed to find peers: %w", err)
-	}
-
-	// Connect to discovered peers
-	go func() {
-		for peer := range peerChan {
-			if peer.ID == n.Host.ID() {
-				continue // Skip ourselves
-			}
-
-			if n.Host.Network().Connectedness(peer.ID) != 1 {
-				if err := n.Host.Connect(ctx, peer); err != nil {
-					if n.Verbose {
-						fmt.Printf("Failed to connect to peer %s: %v\n", peer.ID, err)
-					}
-				} else {
-					if n.Verbose {
-						fmt.Printf("Connected to peer: %s\n", peer.ID)
-					}
-				}
-			}
-		}
-	}()
-
-	return nil
-}
 
 // setupMDNS initializes mDNS discovery for local network peers
 func setupMDNS(h host.Host, verbose bool) error {
