@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/geekp2p/p2p-chat-go/internal/cli"
+	dhtstorage "github.com/geekp2p/p2p-chat-go/internal/dht"
 	"github.com/geekp2p/p2p-chat-go/internal/messaging"
 	"github.com/geekp2p/p2p-chat-go/internal/node"
+	relayservice "github.com/geekp2p/p2p-chat-go/internal/relay"
+	"github.com/geekp2p/p2p-chat-go/internal/routing"
 	"github.com/geekp2p/p2p-chat-go/internal/storage"
 	"github.com/geekp2p/p2p-chat-go/internal/updater"
 )
@@ -64,6 +67,28 @@ func main() {
 	}
 	defer p2pNode.Close()
 
+	// Initialize smart routing
+	fmt.Println("Initializing smart routing...")
+	router := routing.NewSmartRouter(ctx, p2pNode.Host, p2pNode.Verbose)
+	p2pNode.Router = router
+
+	// Initialize relay service
+	fmt.Println("Checking for public IP and relay capabilities...")
+	relaySvc := relayservice.NewRelayService(ctx, p2pNode.Host, p2pNode.Verbose)
+	p2pNode.RelayService = relaySvc
+
+	// Try to enable relay service if we have public IP
+	if relaySvc.IsPublic() {
+		if err := relaySvc.EnableRelayService(); err != nil {
+			fmt.Printf("Note: Could not enable relay service: %v\n", err)
+		}
+	}
+
+	// Initialize distributed storage
+	fmt.Println("Initializing distributed storage (DHT-based)...")
+	dhtStorage := dhtstorage.NewDistributedStorage(ctx, p2pNode.Host, p2pNode.DHT, p2pNode.Verbose)
+	defer dhtStorage.Close()
+
 	// Initialize message store
 	fmt.Printf("Initializing message store at: %s\n", dataDir)
 	store, err := storage.NewMessageStore(dataDir)
@@ -90,10 +115,19 @@ func main() {
 
 	// Wait for peers to connect and mesh to stabilize
 	fmt.Println("Waiting for GossipSub mesh to form...")
-	waitForMesh(msg, 10) // Wait up to 10 seconds for mesh to form
+	waitForMesh(msg, 30) // Wait up to 30 seconds for mesh to form
+
+	// Start background mesh monitor to continuously improve connectivity
+	go monitorMesh(ctx, msg, p2pNode)
 
 	// Start CLI (pass verbose flag pointer so it can be toggled)
 	chatCLI := cli.NewChatCLI(p2pNode.Host, msg, store, &p2pNode.Verbose)
+
+	// Set additional services for CLI commands
+	chatCLI.SetRouter(router)
+	chatCLI.SetRelayService(relaySvc)
+	chatCLI.SetDHTStorage(dhtStorage)
+
 	if err := chatCLI.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "CLI error: %v\n", err)
 		os.Exit(1)
@@ -136,5 +170,41 @@ func waitForMesh(msg *messaging.P2PMessaging, maxSeconds int) {
 		fmt.Println("  This is normal if you're the first peer.")
 		fmt.Println("  Messages will be delivered as other peers join.")
 		fmt.Println("  Use /mesh to check mesh status.")
+	}
+}
+
+// monitorMesh periodically checks mesh status and reports changes
+func monitorMesh(ctx context.Context, msg *messaging.P2PMessaging, p2pNode *node.P2PNode) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	lastMeshCount := 0
+
+	for {
+		select {
+		case <-ticker.C:
+			meshPeers := msg.GetTopicPeers()
+			meshCount := len(meshPeers)
+
+			// Only report if mesh count changed
+			if meshCount != lastMeshCount {
+				if meshCount > lastMeshCount {
+					fmt.Printf("\n✓ Mesh expanded: %d → %d peers\n", lastMeshCount, meshCount)
+					if p2pNode.Verbose {
+						for _, peerID := range meshPeers {
+							fmt.Printf("  - %s\n", peerID.ShortString())
+						}
+					}
+				} else if meshCount < lastMeshCount && meshCount > 0 {
+					fmt.Printf("\n⚠ Mesh shrunk: %d → %d peers\n", lastMeshCount, meshCount)
+				} else if meshCount == 0 && lastMeshCount > 0 {
+					fmt.Printf("\n⚠ All mesh peers disconnected (was %d peers)\n", lastMeshCount)
+				}
+				lastMeshCount = meshCount
+			}
+
+		case <-ctx.Done():
+			return
+		}
 	}
 }
