@@ -14,7 +14,6 @@ import (
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	ping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
-	"github.com/multiformats/go-multiaddr"
 )
 
 // PeerManager handles peer lifecycle, auto-reconnect, and keep-alive
@@ -72,14 +71,14 @@ type ManagerConfig struct {
 func DefaultConfig(topic string) *ManagerConfig {
 	return &ManagerConfig{
 		ReconnectInterval:  30 * time.Second,
-		DiscoveryInterval:  2 * time.Minute, // Increased from 60s to reduce DHT load
-		KeepAliveInterval:  45 * time.Second, // 45s to keep NAT mappings alive
+		DiscoveryInterval:  2 * time.Minute, // Re-run discovery every 2 minutes
+		KeepAliveInterval:  45 * time.Second, // Ping every 45s to keep NAT mappings alive
 		MaxBackoff:         5 * time.Minute,
 		MaxConcurrentDials: 10,
 		RendezvousStrings: []string{
-			topic,                 // Main topic
-			topic + "-global",     // Global discovery
-			topic + "-discovery",  // Discovery channel
+			topic,                // Main topic
+			topic + "-global",    // Global discovery
+			topic + "-discovery", // Discovery channel
 		},
 		Verbose: false,
 	}
@@ -94,16 +93,16 @@ func NewPeerManager(ctx context.Context, h host.Host, discovery *drouting.Routin
 	ctx, cancel := context.WithCancel(ctx)
 
 	pm := &PeerManager{
-		host:           h,
-		discovery:      discovery,
-		ctx:            ctx,
-		cancel:         cancel,
-		verbose:        config.Verbose,
-		knownPeers:     make(map[peer.ID]*peerState),
-		inflightDials:  make(map[peer.ID]struct{}),
-		config:         config,
-		pingService:    ping.NewPingService(h),
-		dialSemaphore:  make(chan struct{}, config.MaxConcurrentDials),
+		host:          h,
+		discovery:     discovery,
+		ctx:           ctx,
+		cancel:        cancel,
+		verbose:       config.Verbose,
+		knownPeers:    make(map[peer.ID]*peerState),
+		inflightDials: make(map[peer.ID]struct{}),
+		config:        config,
+		pingService:   ping.NewPingService(h),
+		dialSemaphore: make(chan struct{}, config.MaxConcurrentDials),
 	}
 
 	// Setup connection event handlers
@@ -194,7 +193,7 @@ func (pm *PeerManager) runDiscovery() {
 		// Use separate context with timeout for each operation
 		advertiseCtx, advertiseCancel := context.WithTimeout(pm.ctx, 30*time.Second)
 
-		// Advertise (note: dutil.Advertise doesn't return TTL in this version)
+		// Advertise (re-advertise periodically)
 		dutil.Advertise(advertiseCtx, pm.discovery, rendezvous)
 		if pm.verbose {
 			fmt.Printf("✓ Advertised on '%s'\n", rendezvous)
@@ -232,6 +231,9 @@ func (pm *PeerManager) connectToDiscoveredPeers(peerChan <-chan peer.AddrInfo, r
 		}
 
 		count++
+
+		// Add addresses to peerstore
+		pm.host.Peerstore().AddAddrs(peerInfo.ID, peerInfo.Addrs, peerstore.TempAddrTTL)
 
 		// Try to connect (with guard)
 		go pm.dialPeer(peerInfo.ID, peerInfo.Addrs)
@@ -290,7 +292,7 @@ func (pm *PeerManager) reconnectDisconnectedPeers() {
 }
 
 // dialPeer attempts to dial a peer with guards and limits
-func (pm *PeerManager) dialPeer(p peer.ID, addrs []multiaddr.Multiaddr) {
+func (pm *PeerManager) dialPeer(p peer.ID, addrs interface{}) {
 	// Check connectedness first
 	if pm.host.Network().Connectedness(p) == network.Connected {
 		return // Already connected
@@ -325,6 +327,12 @@ func (pm *PeerManager) dialPeer(p peer.ID, addrs []multiaddr.Multiaddr) {
 	if state, exists := pm.knownPeers[p]; exists {
 		state.lastAttempt = time.Now()
 		state.attempts++
+	} else {
+		pm.knownPeers[p] = &peerState{
+			lastAttempt: time.Now(),
+			attempts:    1,
+			lastSeen:    time.Now(),
+		}
 	}
 	pm.knownPeersLock.Unlock()
 
@@ -338,16 +346,16 @@ func (pm *PeerManager) dialPeer(p peer.ID, addrs []multiaddr.Multiaddr) {
 	// Attempt connection
 	if err := pm.host.Connect(dialCtx, peerInfo); err != nil {
 		if pm.verbose {
-			fmt.Printf("⚠ Reconnect failed for %s: %v\n", p.ShortString(), err)
+			fmt.Printf("⚠ Dial failed for %s: %v\n", p.ShortString(), err)
 		}
 	} else {
 		if pm.verbose {
-			fmt.Printf("✓ Successfully reconnected to: %s\n", p.ShortString())
+			fmt.Printf("✓ Successfully connected to: %s\n", p.ShortString())
 		}
 	}
 }
 
-// keepAlive sends periodic pings to important peers to maintain NAT mappings
+// keepAlive sends periodic pings to connected peers to maintain NAT mappings
 func (pm *PeerManager) keepAlive() {
 	ticker := time.NewTicker(pm.config.KeepAliveInterval)
 	defer ticker.Stop()
@@ -410,6 +418,13 @@ func (pm *PeerManager) calculateBackoff(attempts int) time.Duration {
 		backoff = pm.config.MaxBackoff
 	}
 	return backoff
+}
+
+// GetKnownPeersCount returns the number of known peers
+func (pm *PeerManager) GetKnownPeersCount() int {
+	pm.knownPeersLock.RLock()
+	defer pm.knownPeersLock.RUnlock()
+	return len(pm.knownPeers)
 }
 
 // Close stops all background tasks
