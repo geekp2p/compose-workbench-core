@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/geekp2p/p2p-chat-go/internal/updater"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
 )
 
 // ChatCLI handles the interactive CLI interface
@@ -203,6 +205,10 @@ func (c *ChatCLI) handleCommand(cmd string) {
 		c.showMeshPeers()
 	case "/history":
 		c.showHistory()
+	case "/clear":
+		c.clearMessages(parts)
+	case "/add":
+		c.addPeer(parts)
 	case "/verbose":
 		c.toggleVerbose()
 	case "/version":
@@ -228,19 +234,22 @@ func (c *ChatCLI) handleCommand(cmd string) {
 // showHelp displays available commands
 func (c *ChatCLI) showHelp() {
 	fmt.Println("\nAvailable Commands:")
-	fmt.Println("  /help     - Show this help message")
-	fmt.Println("  /peers    - List all connected network peers")
-	fmt.Println("  /mesh     - List peers in the chat topic mesh (actual chat participants)")
-	fmt.Println("  /history  - Show recent message history")
-	fmt.Println("  /verbose  - Toggle verbose mode (show connection logs)")
-	fmt.Println("  /version  - Show version information")
-	fmt.Println("  /update   - Check for updates and update binary")
+	fmt.Println("  /help           - Show this help message")
+	fmt.Println("  /peers          - List all connected network peers")
+	fmt.Println("  /mesh           - List peers in the chat topic mesh (actual chat participants)")
+	fmt.Println("  /history        - Show recent message history")
+	fmt.Println("  /clear          - Clear all messages from local database")
+	fmt.Println("  /clear <N>      - Clear messages older than N days")
+	fmt.Println("  /add <peer-id>  - Manually connect to a peer by their ID")
+	fmt.Println("  /verbose        - Toggle verbose mode (show connection logs)")
+	fmt.Println("  /version        - Show version information")
+	fmt.Println("  /update         - Check for updates and update binary")
 	fmt.Println("\nP2P Network Commands:")
-	fmt.Println("  /routing  - Show smart routing statistics")
-	fmt.Println("  /relay    - Show relay service information")
-	fmt.Println("  /dht      - Show DHT storage statistics")
-	fmt.Println("  /conn     - Show connection types (direct/relay)")
-	fmt.Println("  /quit     - Exit the chat")
+	fmt.Println("  /routing        - Show smart routing statistics")
+	fmt.Println("  /relay          - Show relay service information")
+	fmt.Println("  /dht            - Show DHT storage statistics")
+	fmt.Println("  /conn           - Show connection types (direct/relay)")
+	fmt.Println("  /quit           - Exit the chat")
 	fmt.Println()
 }
 
@@ -405,6 +414,90 @@ func (c *ChatCLI) performUpdate() {
 	fmt.Println()
 }
 
+// clearMessages clears messages from local database
+func (c *ChatCLI) clearMessages(parts []string) {
+	// Get current message count
+	count, err := c.store.GetMessageCount()
+	if err != nil {
+		fmt.Printf("Error getting message count: %v\n", err)
+		return
+	}
+
+	if count == 0 {
+		fmt.Println("\nNo messages to clear.\n")
+		return
+	}
+
+	// Check if user wants to clear by days
+	if len(parts) > 1 {
+		// Parse days
+		var days int
+		_, err := fmt.Sscanf(parts[1], "%d", &days)
+		if err != nil {
+			fmt.Printf("Invalid number of days: %s\n", parts[1])
+			fmt.Println("Usage: /clear <days>")
+			fmt.Println("Example: /clear 7  (clears messages older than 7 days)\n")
+			return
+		}
+
+		if days <= 0 {
+			fmt.Println("Number of days must be greater than 0\n")
+			return
+		}
+
+		// Show confirmation
+		fmt.Printf("\n⚠️  This will delete messages older than %d days from your local database.\n", days)
+		fmt.Printf("Current message count: %d\n", count)
+		fmt.Print("Are you sure? (y/N): ")
+
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+
+		if response != "y" && response != "yes" {
+			fmt.Println("Cancelled.\n")
+			return
+		}
+
+		// Clear old messages
+		deleted, err := c.store.ClearOldMessages(days)
+		if err != nil {
+			fmt.Printf("Error clearing old messages: %v\n\n", err)
+			return
+		}
+
+		if deleted == 0 {
+			fmt.Printf("✓ No messages older than %d days found.\n\n", days)
+		} else {
+			fmt.Printf("✓ Deleted %d message(s) older than %d days.\n", deleted, days)
+			fmt.Printf("Remaining messages: %d\n\n", count-deleted)
+		}
+	} else {
+		// Clear all messages
+		fmt.Printf("\n⚠️  This will delete ALL %d message(s) from your local database.\n", count)
+		fmt.Println("This action cannot be undone!")
+		fmt.Print("Are you sure? (y/N): ")
+
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+
+		if response != "y" && response != "yes" {
+			fmt.Println("Cancelled.\n")
+			return
+		}
+
+		// Clear all messages
+		deleted, err := c.store.ClearAllMessages()
+		if err != nil {
+			fmt.Printf("Error clearing messages: %v\n\n", err)
+			return
+		}
+
+		fmt.Printf("✓ Successfully deleted %d message(s).\n\n", deleted)
+	}
+}
+
 // showRoutingStats displays smart routing statistics
 func (c *ChatCLI) showRoutingStats() {
 	if c.router == nil {
@@ -490,4 +583,107 @@ func (c *ChatCLI) showConnectionTypes() {
 
 	fmt.Printf("\nTotal: %d Direct, %d Relay\n", directCount, relayCount)
 	fmt.Println()
+}
+
+// addPeer manually connects to a peer by their peer ID or multiaddr
+func (c *ChatCLI) addPeer(parts []string) {
+	if len(parts) < 2 {
+		fmt.Println("\nUsage: /add <peer-id> or /add <multiaddr>")
+		fmt.Println("Example:")
+		fmt.Println("  /add 12D3KooWBgB3txXxL2qj6iLZBtZCDK885zWKYGNVCj4RaEWwqFkN")
+		fmt.Println("  /add /ip4/192.168.1.100/tcp/4001/p2p/12D3KooW...")
+		fmt.Println("\nTip: Get peer info from other nodes using /peers command\n")
+		return
+	}
+
+	peerStr := parts[1]
+
+	// Try to parse as multiaddr first
+	if strings.Contains(peerStr, "/ip4/") || strings.Contains(peerStr, "/ip6/") || strings.Contains(peerStr, "/dns") {
+		if err := c.connectToMultiaddr(peerStr); err != nil {
+			fmt.Printf("❌ Failed to connect via multiaddr: %v\n\n", err)
+		}
+		return
+	}
+
+	// Parse as peer ID
+	peerID, err := peer.Decode(peerStr)
+	if err != nil {
+		fmt.Printf("❌ Invalid peer ID: %v\n", err)
+		fmt.Println("Peer ID should look like: 12D3KooW...\n")
+		return
+	}
+
+	// Check if already connected
+	if c.host.Network().Connectedness(peerID) == 1 {
+		fmt.Printf("✓ Already connected to peer: %s\n\n", peerID.ShortString())
+		return
+	}
+
+	// Try to connect using DHT (if available)
+	fmt.Printf("🔍 Looking up peer in DHT: %s...\n", peerID.ShortString())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Get peer info from peerstore first
+	addrs := c.host.Peerstore().Addrs(peerID)
+	if len(addrs) > 0 {
+		fmt.Printf("📍 Found %d address(es) in peerstore\n", len(addrs))
+		peerInfo := peer.AddrInfo{
+			ID:    peerID,
+			Addrs: addrs,
+		}
+
+		if err := c.host.Connect(ctx, peerInfo); err != nil {
+			fmt.Printf("❌ Failed to connect: %v\n\n", err)
+			return
+		}
+
+		fmt.Printf("✓ Successfully connected to peer: %s\n", peerID.ShortString())
+		fmt.Println("  Use /mesh to verify they joined the chat mesh\n")
+		return
+	}
+
+	// No addresses in peerstore
+	fmt.Println("⚠️  No known addresses for this peer")
+	fmt.Println("Tip: You may need to:")
+	fmt.Println("  1. Use full multiaddr with /add /ip4/.../p2p/...")
+	fmt.Println("  2. Wait for peer discovery to find this peer")
+	fmt.Println("  3. Ensure both peers are on the same network/topic\n")
+}
+
+// connectToMultiaddr connects to a peer using a full multiaddr
+func (c *ChatCLI) connectToMultiaddr(addrStr string) error {
+	// Parse multiaddr
+	maddr, err := multiaddr.NewMultiaddr(addrStr)
+	if err != nil {
+		return fmt.Errorf("invalid multiaddr: %w", err)
+	}
+
+	// Extract peer info
+	peerInfo, err := peer.AddrInfoFromP2pAddr(maddr)
+	if err != nil {
+		return fmt.Errorf("failed to extract peer info: %w", err)
+	}
+
+	// Check if already connected
+	if c.host.Network().Connectedness(peerInfo.ID) == 1 {
+		fmt.Printf("✓ Already connected to peer: %s\n\n", peerInfo.ID.ShortString())
+		return nil
+	}
+
+	// Connect
+	fmt.Printf("🔗 Connecting to: %s...\n", peerInfo.ID.ShortString())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := c.host.Connect(ctx, *peerInfo); err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+
+	fmt.Printf("✓ Successfully connected to peer: %s\n", peerInfo.ID.ShortString())
+	fmt.Println("  Use /mesh to verify they joined the chat mesh\n")
+	return nil
 }
